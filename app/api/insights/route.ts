@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // Daily: refresh insights for everything posted in the last 60 days.
-export async function POST() {
+async function handler() {
   if (!metaReady()) return NextResponse.json({ skipped: "META_ACCESS_TOKEN or IG_USER_ID not set" });
   const sb = db();
   const since = new Date(Date.now() - 60 * 864e5).toISOString();
@@ -23,4 +23,8 @@ export async function POST() {
   return NextResponse.json({ updated });
 }
 
+export async function POST(...args: Parameters<typeof handler>) {
+  try { return await handler(...args); }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
+}
 export const GET = POST;

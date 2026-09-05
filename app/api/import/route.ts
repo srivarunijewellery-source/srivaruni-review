@@ -12,7 +12,7 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 // Import already-posted reels so the baseline exists on day one. One video analysed per call; call repeatedly until "done".
-export async function POST() {
+async function handler() {
   if (!metaReady()) return NextResponse.json({ skipped: "META_ACCESS_TOKEN or IG_USER_ID not set" });
   const sb = db();
 
@@ -55,4 +55,8 @@ export async function POST() {
   }
 }
 
+export async function POST(...args: Parameters<typeof handler>) {
+  try { return await handler(...args); }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
+}
 export const GET = POST;

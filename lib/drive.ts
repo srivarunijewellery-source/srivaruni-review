@@ -77,3 +77,12 @@ export async function writeText(folderName: string, name: string, text: string) 
 export async function setDescription(fileId: string, text: string) {
   await call(`/files/${fileId}?supportsAllDrives=true`, { method: "PATCH", body: JSON.stringify({ description: text.slice(0, 4000) }) });
 }
+
+/** Diagnostic: what the service account sees at the root. */
+export async function inspectRoot() {
+  const root = process.env.DRIVE_ROOT_FOLDER_ID!;
+  const meta = await (await call(`/files/${root}?fields=id,name,mimeType,owners(emailAddress),capabilities(canEdit)&supportsAllDrives=true`)).json();
+  const q = encodeURIComponent(`'${root}' in parents and trashed = false`);
+  const kids = await (await call(`/files?q=${q}&fields=files(id,name,mimeType)&supportsAllDrives=true&includeItemsFromAllDrives=true`)).json();
+  return { serviceAccount: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!).client_email, root: meta, children: kids.files ?? [] };
+}

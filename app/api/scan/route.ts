@@ -13,7 +13,7 @@ export const maxDuration = 60; // Hobby ceiling; Pro allows 300
 export const dynamic = "force-dynamic";
 
 // One video per call keeps us under the function time limit. The Apps Script trigger calls this every 5 minutes.
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   const sb = db();
 
   // 1. Register anything new in the inbox.
@@ -55,4 +55,8 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function POST(...args: Parameters<typeof handler>) {
+  try { return await handler(...args); }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
+}
 export const GET = POST;
