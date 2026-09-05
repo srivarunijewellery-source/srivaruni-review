@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { readFile, readdir, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import ffmpegPath from "ffmpeg-static";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { laplacianVariance, sharpnessScore, meanBrightness, frameDiff, countCuts, median } from "./metrics.mjs";
 import type { Metrics } from "./db";
 
@@ -15,7 +15,7 @@ export type Frame = { t: number; jpg: Buffer; sharp: number; bright: number };
 
 export async function analyze(videoPath: string, workDir: string) {
   await mkdir(workDir, { recursive: true });
-  const ff = ffmpegPath as unknown as string;
+  const ff = ffmpegInstaller.path;
 
   // Duration + dimensions come from ffmpeg's own stderr banner; no ffprobe binary needed.
   let banner = "";

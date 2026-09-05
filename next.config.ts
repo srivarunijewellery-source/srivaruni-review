@@ -1,10 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // ffmpeg-static ships a binary; make sure Vercel bundles it with the scan function.
-  serverExternalPackages: ["sharp", "ffmpeg-static"],
+  // @ffmpeg-installer ships the binary as a plain file (no postinstall download); bundle it with both video routes.
+  serverExternalPackages: ["sharp", "@ffmpeg-installer/ffmpeg"],
   outputFileTracingIncludes: {
-    "/api/scan": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/scan": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
+    "/api/import": ["./node_modules/@ffmpeg-installer/linux-x64/**"],
   },
 };
 
