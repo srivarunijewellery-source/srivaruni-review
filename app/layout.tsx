@@ -14,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="top">
           <a href="/" className="brand">Sri Varuni <span>reel review</span></a>
           <nav>
+            <form action="/api/import" method="post"><button className="ghost" type="submit">Import posted reels</button></form>
             <form action="/api/scan" method="post"><button className="ghost" type="submit">Scan Drive now</button></form>
           </nav>
         </header>

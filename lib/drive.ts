@@ -33,16 +33,9 @@ export async function folderId(name: string): Promise<string> {
   const root = process.env.DRIVE_ROOT_FOLDER_ID!;
   const q = encodeURIComponent(`'${root}' in parents and name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
   const found = await (await call(`/files?q=${q}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`)).json();
-  let id = found.files?.[0]?.id;
-  if (!id) {
-    const made = await (
-      await call(`/files?supportsAllDrives=true`, {
-        method: "POST",
-        body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [root] }),
-      })
-    ).json();
-    id = made.id;
-  }
+  const id = found.files?.[0]?.id;
+  // ponytail: service accounts have no Drive storage quota, so we never create folders. The team makes the three once.
+  if (!id) throw new Error(`Drive folder "${name}" not found inside the root folder. Create it and share the root with the service account as Editor.`);
   folderIds[name] = id;
   return id;
 }
@@ -78,4 +71,9 @@ export async function writeText(folderName: string, name: string, text: string) 
     body,
   });
   if (!res.ok) throw new Error(`Drive upload: ${res.status} ${await res.text()}`);
+}
+
+/** Metadata only, no storage quota needed. Shows in Drive's file details and search. */
+export async function setDescription(fileId: string, text: string) {
+  await call(`/files/${fileId}?supportsAllDrives=true`, { method: "PATCH", body: JSON.stringify({ description: text.slice(0, 4000) }) });
 }

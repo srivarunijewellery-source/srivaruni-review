@@ -1,6 +1,6 @@
 # Sri Varuni reel review
 
-Editors drop a draft reel in a Drive folder. Five minutes later a verdict sits next to the file and on the dashboard: time to product, price on screen, Telugu line, sharpness, cut rate, length, caption, three hook rewrites. Ready reels move to "3. Ready to post", the rest to "2. Fix".
+Editors drop a draft reel in a Drive folder. Five minutes later the verdict is in the file's Description on Drive and on the dashboard: time to product, price on screen, Telugu line, sharpness, cut rate, length, caption, three hook rewrites. Ready reels move to "3. Ready to post", the rest to "2. Fix".
 
 ## How it runs
 
@@ -20,11 +20,15 @@ Videos are never stored by the app. They live in the editor's Drive; the app kee
 ## Setup, once
 
 1. **Supabase**: SQL editor → run `supabase/schema.sql`.
-2. **Drive**: create a folder "Sri Varuni Reel Review". Copy its id from the URL. Share it (Editor) with the service account email from step 3. Subfolders are created automatically.
+2. **Drive**: create a folder "Sri Varuni Reel Review" with three subfolders inside, named exactly `1. To review`, `2. Fix`, `3. Ready to post`. Copy the root folder id from the URL. Share the root (Editor) with the service account email from step 3. Any of your Google accounts can own it.
 3. **Google service account**: console.cloud.google.com → project → enable Google Drive API → IAM → Service Accounts → create → Keys → JSON. Paste the JSON on one line into `GOOGLE_SERVICE_ACCOUNT_JSON`.
 4. **Vercel**: import this repo, set the variables from `.env.example`, deploy.
 5. **Apps Script**: paste `scripts/apps-script.gs`, set BASE and PASSWORD, add the two time triggers.
-6. **Meta (week two)**: developers.facebook.com → your app → Graph API Explorer → token with `instagram_basic`, `instagram_manage_insights`, `pages_read_engagement` → exchange for a long-lived token. `IG_USER_ID` is the Instagram Business Account id (Business Suite → settings, or `/me/accounts?fields=instagram_business_account`).
+6. **Meta (do this on day one)**: developers.facebook.com → your app → Graph API Explorer → token with `instagram_basic`, `instagram_manage_insights`, `pages_read_engagement` → exchange for a long-lived token. `IG_USER_ID` is the Instagram Business Account id (Business Suite → settings, or `/me/accounts?fields=instagram_business_account`).
+
+## Day one: score what you already posted
+
+Press "Import posted reels" (or let the `importPosted` trigger run). Each call scores one reel from Instagram with the same rubric and joins its real saves, reach and watch time. After 30 or so, the dashboard shows which checks actually moved saves for your account. That table is the bar; raise `SHARPNESS_MIN` and the rules in `lib/score.ts` toward what your best reels already do.
 
 ## Editor workflow
 

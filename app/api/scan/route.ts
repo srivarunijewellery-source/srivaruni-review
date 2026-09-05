@@ -3,9 +3,10 @@ import { mkdtemp } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { db, type Reel } from "@/lib/db";
-import { listInbox, download, move, writeText, FOLDERS } from "@/lib/drive";
-import { analyze, pickForClaude, pickForStorage, transcribe, cleanup } from "@/lib/video";
-import { scoreWithClaude, reportMarkdown } from "@/lib/score";
+import { listInbox, download, move, writeText, setDescription, FOLDERS } from "@/lib/drive";
+import { cleanup } from "@/lib/video";
+import { reportMarkdown } from "@/lib/score";
+import { analyzeAndScore } from "@/lib/process";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // Hobby ceiling; Pro allows 300
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Claim one pending reel.
-  const { data: pending } = await sb.from("reels").select("*").eq("status", "pending").order("created_at").limit(1);
+  const { data: pending } = await sb.from("reels").select("*").eq("status", "pending").not("drive_file_id", "like", "ig:%").order("created_at").limit(1);
   const reel = pending?.[0] as Reel | undefined;
   if (!reel) return NextResponse.json({ registered: inbox.length, processed: null });
   const { data: claimed } = await sb.from("reels").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", reel.id).eq("status", "pending").select("id");
@@ -32,15 +33,16 @@ export async function POST(req: NextRequest) {
   try {
     const videoPath = path.join(work, "in.mp4");
     await download(reel.drive_file_id, videoPath);
-    const { frames, metrics, audioPath } = await analyze(videoPath, path.join(work, "frames"));
-    const [transcript, stored] = await Promise.all([transcribe(audioPath), pickForStorage(frames)]);
-    const report = await scoreWithClaude({ frames: pickForClaude(frames), metrics, caption: reel.caption, transcript });
+    const { patch, report, metrics } = await analyzeAndScore(videoPath, work, reel.caption);
 
     const origin = req.nextUrl.origin;
-    await sb.from("reels").update({ status: report.verdict, metrics, report, frames: stored, transcript, error: null, updated_at: new Date().toISOString() }).eq("id", reel.id);
+    await sb.from("reels").update(patch).eq("id", reel.id);
 
     const dest = report.verdict === "ready" ? FOLDERS.ready : FOLDERS.fix;
-    await writeText(dest, `${reel.name}.report.txt`, reportMarkdown(reel.name, report, metrics, `${origin}/reel/${reel.id}`));
+    const md = reportMarkdown(reel.name, report, metrics, `${origin}/reel/${reel.id}`);
+    // Verdict into the file's own description (always works); a sidecar report file is a bonus that may fail on quota.
+    await setDescription(reel.drive_file_id, md);
+    await writeText(dest, `${reel.name}.report.txt`, md).catch(() => {});
     await move(reel.drive_file_id, FOLDERS.inbox, dest);
 
     return NextResponse.json({ registered: inbox.length, processed: reel.name, verdict: report.verdict, score: report.score });

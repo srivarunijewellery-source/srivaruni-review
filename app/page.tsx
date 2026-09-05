@@ -20,6 +20,16 @@ export default async function Home() {
   const readyRate = scored.length ? Math.round((100 * scored.filter((r) => r.report!.verdict === "ready").length) / scored.length) : null;
   const saves = scored.map((r) => r.insights?.saved ?? 0);
 
+  // What actually worked: for each check, median saves when it passed vs failed, over every posted reel with insights.
+  const posted = reels.filter((r) => r.report && r.insights && typeof r.insights.saved === "number");
+  const lifts = posted.length >= 6
+    ? posted[0].report!.checks.map((c) => {
+        const pass = posted.filter((r) => r.report!.checks.find((x) => x.name === c.name)?.pass).map((r) => r.insights!.saved);
+        const fail = posted.filter((r) => !r.report!.checks.find((x) => x.name === c.name)?.pass).map((r) => r.insights!.saved);
+        return { name: c.name, pass: med(pass), fail: med(fail), n: pass.length, m: fail.length };
+      }).filter((l) => l.n >= 3 && l.m >= 3).sort((a, b) => ((b.pass ?? 0) - (b.fail ?? 0)) - ((a.pass ?? 0) - (a.fail ?? 0)))
+    : [];
+
   return (
     <>
       <h1>Every reel, checked before it posts</h1>
@@ -34,8 +44,19 @@ export default async function Home() {
         </div>
       )}
 
+      {lifts.length > 0 && (
+        <div className="bar">
+          <b>What earned saves on your {posted.length} posted reels</b>
+          <p className="muted" style={{ margin: "4px 0 10px" }}>Median saves when a check passed vs failed. The biggest gaps are the rules that matter for Sri Varuni; tighten those first.</p>
+          <table>
+            <thead><tr><th>Check</th><th>Passed</th><th>Failed</th><th>Reels</th></tr></thead>
+            <tbody>{lifts.map((l) => <tr key={l.name}><td>{l.name}</td><td>{l.pass}</td><td>{l.fail}</td><td>{l.n}/{l.m}</td></tr>)}</tbody>
+          </table>
+        </div>
+      )}
+
       {reels.length === 0 ? (
-        <div className="empty">Nothing reviewed yet. Drop a video in “1. To review” on Drive, or press “Scan Drive now”.</div>
+        <div className="empty">Nothing here yet. Press “Import posted reels” to score what is already on Instagram, or drop a draft in “1. To review” on Drive.</div>
       ) : (
         <div className="list">
           {reels.map((r) => {

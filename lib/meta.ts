@@ -39,3 +39,17 @@ export async function insights(mediaId: string): Promise<Record<string, number>>
     return out;
   }
 }
+
+export type IgPost = { id: string; media_type: string; media_url?: string; permalink: string; caption?: string; timestamp: string };
+
+/** Recent video posts (reels) with a downloadable media_url. */
+export async function recentReels(limit = 60): Promise<IgPost[]> {
+  const out: IgPost[] = [];
+  let url: string | null = `/${process.env.IG_USER_ID}/media?fields=id,media_type,media_url,permalink,caption,timestamp&limit=50`;
+  while (url && out.length < limit) {
+    const j: { data: IgPost[]; paging?: { next?: string } } = await get(url);
+    out.push(...j.data.filter((m) => m.media_type === "VIDEO"));
+    url = j.paging?.next ? j.paging.next.replace(G, "").replace(/([?&])access_token=[^&]+/, "$1") : null;
+  }
+  return out.slice(0, limit);
+}
