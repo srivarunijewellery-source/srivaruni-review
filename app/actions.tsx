@@ -37,8 +37,14 @@ export default function Actions({ pending }: { pending: number }) {
     setBusy(""); router.refresh();
   }
 
+  async function reanalyze() {
+    if (!confirm("Queue every analysed Instagram reel again? Use after a rubric change. Takes ~40s per reel.")) return;
+    setBusy("scan"); const r = await post("/api/reanalyze"); setMsg(r.error ? `Failed: ${r.error}` : `${r.queued} reels queued. Press Analyze.`); setBusy(""); router.refresh();
+  }
+
   return (
     <div className="actions">
+      <button className="link" disabled={!!busy} onClick={reanalyze} title="Queue all Instagram reels again after a rubric change">Re-analyze all</button>
       <button className="ghost" disabled={!!busy} onClick={() => run("import")}>{busy === "import" ? "Importing…" : "Import from Instagram"}</button>
       <button className="ghost" disabled={!!busy} onClick={() => run("scan")}>{busy === "scan" ? "Scanning…" : "Scan Drive"}</button>
       {busy === "analyze"

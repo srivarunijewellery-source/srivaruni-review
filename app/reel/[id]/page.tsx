@@ -1,6 +1,6 @@
 import { db, type Reel } from "@/lib/db";
 import { notFound } from "next/navigation";
-import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates } from "@/lib/dimensions";
+import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates, label } from "@/lib/dimensions";
 import Radar from "../../radar";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
   const r = data as Reel;
   const rep = r.report, m = r.metrics;
   const { bar, mid, n: barN } = computeBar((all ?? []) as Reel[]);
-  const s = rep && m ? scoreDims(rep, m, r.caption) : null;
+  const s = rep && m ? scoreDims(rep, m, r.caption, r.frames?.length ?? 0) : null;
   const tag = s ? tagFor(s, bar, mid) : null;
   const e = rates(r.insights, m?.duration_s);
   const product = new Set(rep?.product_frames ?? []);
@@ -71,12 +71,38 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
             </div>
           </section>
 
+          {rep.subject && (
+            <div className="card">
+              <div className="cardhead"><b>What it shows</b>{rep.subject.emotional_hook && <span className="muted small">“{rep.subject.emotional_hook}”</span>}</div>
+              <div className="tagrow">
+                <div className="tag subject">{label(rep.subject.motif)}</div>
+                <div className="tag subject">{label(rep.subject.piece)}</div>
+                <div className="tag subject">{label(rep.subject.person)}</div>
+                <div className="tag subject">{label(rep.subject.colour)}</div>
+                {rep.subject.occasion && <div className="tag subject">{rep.subject.occasion}</div>}
+              </div>
+            </div>
+          )}
+          {r.insights?.ad_spend != null && (
+            <div className="card">
+              <div className="cardhead"><b>Ad results</b><span className="muted small">all ads that used this reel</span></div>
+              <div className="kv">
+                <div><b>₹{Math.round(r.insights.ad_spend).toLocaleString("en-IN")}</b><span className="muted">spent</span></div>
+                {r.insights.ad_impressions != null && <div><b>{Math.round(r.insights.ad_impressions).toLocaleString("en-IN")}</b><span className="muted">impressions</span></div>}
+                {r.insights.ad_follows != null && <div><b>{r.insights.ad_follows}</b><span className="muted">follows</span></div>}
+                {r.insights.ad_cost_per_follow != null && <div><b>₹{Math.round(r.insights.ad_cost_per_follow)}</b><span className="muted">per follow</span></div>}
+                {r.insights.ad_saves != null && <div><b>{r.insights.ad_saves}</b><span className="muted">saves</span></div>}
+                {r.insights.ad_cost_per_save != null && <div><b>₹{Math.round(r.insights.ad_cost_per_save)}</b><span className="muted">per save</span></div>}
+                {r.insights.ad_cost_per_engagement != null && <div><b>₹{Math.round(r.insights.ad_cost_per_engagement)}</b><span className="muted">per engagement</span></div>}
+              </div>
+            </div>
+          )}
           <div className="card">
             <div className="cardhead"><b>Editor notes</b></div>
             <p>{rep.summary}</p>
           </div>
 
-          <h2>What the viewer sees</h2>
+          <details open className="section"><summary>What the viewer sees</summary>
           <div className="legend"><i style={{ background: "var(--plum)" }} />first frame <i style={{ background: "var(--gold)" }} />jewellery on screen</div>
           <div className="film">
             {r.frames?.map((f, i) => (
@@ -86,8 +112,9 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
               </figure>
             ))}
           </div>
+          </details>
 
-          <h2>Checks</h2>
+          <details open className="section"><summary>Checks</summary>
           <div className="checks">
             {rep.checks.map((c) => (
               <div key={c.name} className={`check ${c.pass ? "pass" : "fail"}`}>
@@ -99,14 +126,16 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
               </div>
             ))}
           </div>
+          </details>
 
-          {rep.hooks.length > 0 && (<><h2>Hooks for the first second</h2><ul className="hooks">{rep.hooks.map((h, i) => <li key={i}>{h}</li>)}</ul></>)}
+          {rep.hooks.length > 0 && (<details open className="section"><summary>Hooks for the first second</summary><ul className="hooks">{rep.hooks.map((h, i) => <li key={i}>{h}</li>)}</ul></details>)}
 
-          <h2>Caption</h2>
+          <details className="section"><summary>Caption</summary>
           {r.caption && <p className="muted small">Yours: {r.caption}</p>}
           <div className="caption">{rep.caption_rewrite}</div>
+          </details>
 
-          {r.transcript && (<><h2>Voiceover heard</h2><div className="transcript">{r.transcript}</div></>)}
+          {r.transcript && (<details className="section"><summary>Voiceover heard</summary><div className="transcript">{r.transcript}</div></details>)}
         </>
       )}
 

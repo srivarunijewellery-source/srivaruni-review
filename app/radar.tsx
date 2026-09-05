@@ -9,10 +9,10 @@ export default function Radar({ scores, bar, size = 280, labels = true }: { scor
     <svg viewBox={`0 0 ${size} ${size}`} width="100%" style={{ maxWidth: size, display: "block" }} role="img" aria-label="Dimension radar">
       {[25, 50, 75, 100].map((g) => <polygon key={g} points={DIMS.map((_, i) => pt(i, g).join(",")).join(" ")} fill="none" stroke="var(--line)" strokeWidth={g === 100 ? 1.2 : 0.7} />)}
       {DIMS.map((_, i) => { const [x, y] = pt(i, 100); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--line)" strokeWidth="0.7" />; })}
-      {bar && <polygon points={poly(bar)} fill="rgba(180,140,240,0.10)" stroke="var(--plum)" strokeWidth="1.5" strokeDasharray="5 4" />}
-      <polygon points={poly(scores)} fill="rgba(224,180,90,0.22)" stroke="var(--gold)" strokeWidth="2" />
+      {bar && <polygon points={poly(bar)} fill="rgba(124,92,196,0.10)" stroke="var(--plum)" strokeWidth="1.5" strokeDasharray="5 4" />}
+      <polygon points={poly(scores)} fill="rgba(200,150,46,0.22)" stroke="var(--gold)" strokeWidth="2" />
       {DIMS.map((d, i) => { const [x, y] = pt(i, scores[d.key]); return <circle key={d.key} cx={x} cy={y} r="3" fill="var(--gold)" />; })}
-      {labels && DIMS.map((d, i) => { const [x, y] = pt(i, 122); return <text key={d.key} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize="11" fill="var(--muted)" fontWeight="600">{d.label}</text>; })}
+      {labels && DIMS.map((d, i) => { const [x, y] = pt(i, 122); return <text key={d.key} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize="10.5" fill="var(--muted)" fontWeight="600">{d.label}</text>; })}
     </svg>
   );
 }

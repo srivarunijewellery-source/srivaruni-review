@@ -44,6 +44,16 @@ export type Report = {
   hooks: string[];
   caption_rewrite: string;
   summary: string;
+  subject?: Subject;
+};
+
+export type Subject = {
+  motif: "deity_temple" | "floral_nature" | "bridal_heavy" | "minimal_daily" | "contemporary" | "other";
+  piece: "necklace_set" | "choker" | "long_haram" | "earrings" | "bangles" | "maang_tikka" | "mixed" | "other";
+  person: "none" | "hands_only" | "face_visible";
+  colour: "gold" | "silver" | "coloured_stones" | "pearls" | "mixed";
+  occasion: string | null;
+  emotional_hook: string | null;
 };
 
 export const db = () =>

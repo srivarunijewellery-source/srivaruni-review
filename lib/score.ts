@@ -1,4 +1,4 @@
-import type { Check, Metrics, Report } from "./db";
+import type { Check, Metrics, Report, Subject } from "./db";
 import type { Frame } from "./video";
 
 const SHARPNESS_MIN = () => +(process.env.SHARPNESS_MIN ?? 55);
@@ -44,8 +44,21 @@ const REPORT_TOOL = {
       hooks: { type: "array", items: { type: "string" }, description: "3 first-second on-screen lines, Telugu then English in brackets, max 8 words each" },
       caption_rewrite: { type: "string", description: "Caption in house format: one line, price, occasion, 'WhatsApp: [number]' placeholder, 5 hashtags max" },
       summary: { type: "string", description: "Two sentences an editor can act on" },
+      subject: {
+        type: "object",
+        description: "What the reel shows. Subject matter drives engagement as much as craft.",
+        properties: {
+          motif: { type: "string", enum: ["deity_temple", "floral_nature", "bridal_heavy", "minimal_daily", "contemporary", "other"], description: "deity_temple = Lakshmi, Ganesha, temple work, kemp, nakshi; bridal_heavy = full bridal sets; minimal_daily = office/daily wear" },
+          piece: { type: "string", enum: ["necklace_set", "choker", "long_haram", "earrings", "bangles", "maang_tikka", "mixed", "other"] },
+          person: { type: "string", enum: ["none", "hands_only", "face_visible"] },
+          colour: { type: "string", enum: ["gold", "silver", "coloured_stones", "pearls", "mixed"] },
+          occasion: { type: ["string", "null"], description: "Occasion named on screen or in caption, e.g. Bathukamma, wedding, reception; null if none" },
+          emotional_hook: { type: ["string", "null"], description: "The feeling the reel sells in under 6 words, e.g. 'blessing for the bride'; null if none" },
+        },
+        required: ["motif", "piece", "person", "colour", "occasion", "emotional_hook"],
+      },
     },
-    required: ["time_to_product_s", "price_on_screen_s", "telugu_text_s", "reason_to_stay_s", "product_frames", "opening", "what_is_missing", "hooks", "caption_rewrite", "summary"],
+    required: ["time_to_product_s", "price_on_screen_s", "telugu_text_s", "reason_to_stay_s", "product_frames", "opening", "what_is_missing", "hooks", "caption_rewrite", "summary", "subject"],
   },
 };
 
@@ -130,6 +143,7 @@ function buildReport(ai: Record<string, unknown>, metrics: Metrics, frames: Fram
     checks,
     hooks: Array.isArray(ai.hooks) ? (ai.hooks as string[]).slice(0, 3) : [],
     caption_rewrite: String(ai.caption_rewrite ?? ""),
+    subject: (ai.subject && typeof ai.subject === "object" ? ai.subject : undefined) as Subject | undefined,
     summary: [ai.opening, ...(Array.isArray(ai.what_is_missing) ? (ai.what_is_missing as string[]) : []), ai.summary].filter(Boolean).join(" "),
   };
 }

@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { db, type Reel } from "@/lib/db";
 import { download, move, writeText, setDescription, FOLDERS } from "@/lib/drive";
-import { metaReady, mediaUrl, insights, boostedMediaIds } from "@/lib/meta";
+import { metaReady, mediaUrl, insights, adResults, adFields } from "@/lib/meta";
 import { analyzeAndScore } from "@/lib/process";
 import { reportMarkdown } from "@/lib/score";
 import { cleanup } from "@/lib/video";
@@ -42,7 +42,7 @@ async function handler(req: NextRequest) {
 
     const { patch, report, metrics } = await analyzeAndScore(videoPath, work, reel.caption);
     let ins = isIg && metaReady() ? await insights(reel.ig_media_id!).catch(() => null) : reel.insights;
-    if (ins && isIg) { const boosted = await boostedMediaIds().catch(() => new Set<string>()); ins = { ...ins, boosted: boosted.has(reel.ig_media_id!) ? 1 : 0 }; }
+    if (ins && isIg) { const ads = await adResults().catch(() => new Map()); ins = { ...ins, ...adFields(ads.get(reel.ig_media_id!)) }; }
     await sb.from("reels").update({ ...patch, insights: ins }).eq("id", reel.id);
 
     if (!isIg) {

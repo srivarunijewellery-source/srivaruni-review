@@ -62,16 +62,44 @@ export async function mediaUrl(mediaId: string): Promise<string | null> {
   return j.media_url ?? null;
 }
 
-/** Media ids that have ever been run as ads. Needs META_AD_ACCOUNT_ID (digits only) and ads_read on the token. */
-export async function boostedMediaIds(): Promise<Set<string>> {
+export type AdResult = { spend: number; impressions: number; actions: Record<string, number>; cpa: Record<string, number> };
+
+/** Ad spend and results per Instagram media id, summed across every ad that used the post. Needs META_AD_ACCOUNT_ID and ads_read. */
+let adCache: { at: number; map: Map<string, AdResult> } | null = null;
+export async function adResults(): Promise<Map<string, AdResult>> {
   const acct = process.env.META_AD_ACCOUNT_ID;
-  if (!acct) return new Set();
-  const out = new Set<string>();
-  let url: string | null = `/act_${acct}/ads?fields=creative{effective_instagram_media_id,instagram_permalink_url}&limit=200`;
-  for (let page = 0; url && page < 5; page++) {
-    const j: { data: { creative?: { effective_instagram_media_id?: string } }[]; paging?: { next?: string } } = await get(url);
-    for (const a of j.data) if (a.creative?.effective_instagram_media_id) out.add(a.creative.effective_instagram_media_id);
+  if (!acct) return new Map();
+  if (adCache && Date.now() - adCache.at < 10 * 60e3) return adCache.map;
+  const map = new Map<string, AdResult>();
+  let url: string | null = `/act_${acct}/ads?fields=creative{effective_instagram_media_id},insights.date_preset(maximum){spend,impressions,actions,cost_per_action_type}&limit=100`;
+  type Row = { creative?: { effective_instagram_media_id?: string }; insights?: { data: { spend: string; impressions: string; actions?: { action_type: string; value: string }[]; cost_per_action_type?: { action_type: string; value: string }[] }[] } };
+  for (let page = 0; url && page < 10; page++) {
+    const j: { data: Row[]; paging?: { next?: string } } = await get(url);
+    for (const a of j.data) {
+      const id = a.creative?.effective_instagram_media_id, ins = a.insights?.data?.[0];
+      if (!id || !ins) continue;
+      const cur = map.get(id) ?? { spend: 0, impressions: 0, actions: {}, cpa: {} };
+      cur.spend += +ins.spend || 0; cur.impressions += +ins.impressions || 0;
+      for (const x of ins.actions ?? []) cur.actions[x.action_type] = (cur.actions[x.action_type] ?? 0) + (+x.value || 0);
+      map.set(id, cur);
+    }
     url = j.paging?.next ?? null;
   }
+  for (const r of map.values()) for (const [k, v] of Object.entries(r.actions)) r.cpa[k] = v > 0 ? +(r.spend / v).toFixed(2) : 0;
+  adCache = { at: Date.now(), map };
+  return map;
+}
+
+export async function boostedMediaIds(): Promise<Set<string>> { return new Set((await adResults()).keys()); }
+
+/** Flatten ad results into the insights record: ad_spend, ad_follows, ad_cost_per_follow, ad_saves, ad_cost_per_save. */
+export function adFields(r: AdResult | undefined): Record<string, number> {
+  if (!r) return { boosted: 0 };
+  const pick = (re: RegExp) => Object.entries(r.actions).find(([k]) => re.test(k));
+  const follow = pick(/follow/i), save = pick(/post_save|save/i), eng = pick(/^post_engagement$/);
+  const out: Record<string, number> = { boosted: 1, ad_spend: Math.round(r.spend), ad_impressions: r.impressions };
+  if (follow) { out.ad_follows = follow[1]; out.ad_cost_per_follow = r.cpa[follow[0]]; }
+  if (save) { out.ad_saves = save[1]; out.ad_cost_per_save = r.cpa[save[0]]; }
+  if (eng) { out.ad_engagements = eng[1]; out.ad_cost_per_engagement = r.cpa[eng[0]]; }
   return out;
 }
