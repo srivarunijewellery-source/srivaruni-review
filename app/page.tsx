@@ -33,7 +33,7 @@ export default async function Home() {
   return (
     <>
       <h1>Every reel, checked before it posts</h1>
-      <p className="muted">Drop a draft in the Drive folder “1. To review”. The verdict lands here and next to the file within five minutes.</p>
+      <p className="muted">Drafts go in the Drive folder “1. To review”. Posted reels come in from Instagram with their real saves. Same rubric for both, so the bar is one number.</p>
 
       {scored.length > 0 && (
         <div className="stats">

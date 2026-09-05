@@ -77,7 +77,8 @@ async function handler(req: NextRequest) {
 }
 
 export async function POST(...args: Parameters<typeof handler>) {
-  try { return await handler(...args); }
-  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
+  const utf8 = { "content-type": "application/json; charset=utf-8" };
+  try { const r = await handler(...args); r.headers.set("content-type", utf8["content-type"]); return r; }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500, headers: utf8 }); }
 }
 export const GET = POST;

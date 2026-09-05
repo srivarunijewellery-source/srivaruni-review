@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Actions from "./actions";
 
 export const metadata: Metadata = { title: "Sri Varuni reel review", description: "Every reel checked before it posts." };
 
@@ -13,10 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <header className="top">
           <a href="/" className="brand">Sri Varuni <span>reel review</span></a>
-          <nav>
-            <form action="/api/import" method="post"><button className="ghost" type="submit">Import posted reels</button></form>
-            <form action="/api/scan" method="post"><button className="ghost" type="submit">Scan Drive now</button></form>
-          </nav>
+          <nav><Actions /></nav>
         </header>
         <main>{children}</main>
       </body>

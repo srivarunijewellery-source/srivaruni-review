@@ -26,19 +26,28 @@ Definitions:
 - "reason to stay": an on-screen line or spoken line that tells the viewer why this piece matters now: an occasion, a price claim, a comparison, a scarcity line.
 - Telugu text: Telugu script visible on screen (transliterated Telugu in Latin letters also counts if clearly Telugu).
 
-Return ONLY a JSON object, no markdown, with this exact shape:
-{
- "time_to_product_s": number|null,
- "price_on_screen_s": number|null,
- "telugu_text_s": number|null,
- "reason_to_stay_s": number|null,
- "product_frames": number[],            // indices (0-based, in the order frames were given) where product is on screen
- "opening": string,                     // what the first 1s actually shows, one sentence
- "what_is_missing": string[],           // 2 to 5 concrete, visual observations
- "hooks": string[],                     // 3 on-screen first-second lines, Telugu first then English in brackets, max 8 words each
- "caption_rewrite": string,             // caption in the house format: one line, price, occasion, "WhatsApp: [number]" placeholder, 5 hashtags max
- "summary": string                      // two sentences an editor can act on
-}`;
+Record your review with the report tool.`;
+
+const REPORT_TOOL = {
+  name: "report",
+  description: "Record the reel review.",
+  input_schema: {
+    type: "object",
+    properties: {
+      time_to_product_s: { type: ["number", "null"], description: "Seconds until the jewellery fills the frame in focus; null if never" },
+      price_on_screen_s: { type: ["number", "null"], description: "Seconds until a rupee price is legible; null if never" },
+      telugu_text_s: { type: ["number", "null"], description: "Seconds until Telugu text appears on screen; null if never" },
+      reason_to_stay_s: { type: ["number", "null"], description: "Seconds until an on-screen or spoken reason to keep watching; null if never" },
+      product_frames: { type: "array", items: { type: "integer" }, description: "0-based indices of frames where the product is on screen" },
+      opening: { type: "string", description: "What the first second actually shows, one sentence" },
+      what_is_missing: { type: "array", items: { type: "string" }, description: "2 to 5 concrete visual observations" },
+      hooks: { type: "array", items: { type: "string" }, description: "3 first-second on-screen lines, Telugu then English in brackets, max 8 words each" },
+      caption_rewrite: { type: "string", description: "Caption in house format: one line, price, occasion, 'WhatsApp: [number]' placeholder, 5 hashtags max" },
+      summary: { type: "string", description: "Two sentences an editor can act on" },
+    },
+    required: ["time_to_product_s", "price_on_screen_s", "telugu_text_s", "reason_to_stay_s", "product_frames", "opening", "what_is_missing", "hooks", "caption_rewrite", "summary"],
+  },
+};
 
 export async function scoreWithClaude(input: {
   frames: Frame[];
@@ -57,18 +66,26 @@ export async function scoreWithClaude(input: {
     text: `Measured: duration ${metrics.duration_s}s, ${metrics.cuts} cuts (${metrics.cuts_per_10s} per 10s), median brightness ${metrics.brightness}/255, ${metrics.width}x${metrics.height}.
 Caption: ${caption ?? "(none)"}
 Transcript: ${transcript ?? "(no audio transcription available)"}
-Return the JSON.`,
+Record the review.`,
   });
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: process.env.CLAUDE_MODEL ?? "claude-sonnet-5", max_tokens: 1500, system: SYSTEM, messages: [{ role: "user", content }] }),
+    body: JSON.stringify({
+      model: process.env.CLAUDE_MODEL ?? "claude-sonnet-5",
+      max_tokens: 2000,
+      system: SYSTEM,
+      tools: [REPORT_TOOL],
+      tool_choice: { type: "tool", name: "report" },
+      messages: [{ role: "user", content }],
+    }),
   });
   if (!res.ok) throw new Error(`Claude: ${res.status} ${await res.text()}`);
   const data = await res.json();
-  const text = (data.content as { type: string; text?: string }[]).filter((c) => c.type === "text").map((c) => c.text).join("");
-  const ai = JSON.parse(text.replace(/```json|```/g, "").trim());
+  const call = (data.content as { type: string; name?: string; input?: Record<string, unknown> }[]).find((c) => c.type === "tool_use" && c.name === "report");
+  if (!call?.input) throw new Error("Claude returned no report");
+  const ai = call.input;
 
   return buildReport(ai, metrics, frames, caption);
 }
