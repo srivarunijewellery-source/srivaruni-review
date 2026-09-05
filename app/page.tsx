@@ -1,80 +1,105 @@
 import { db, type Reel } from "@/lib/db";
+import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates } from "@/lib/dimensions";
+import Radar from "./radar";
 
 export const dynamic = "force-dynamic";
 
-function Spark({ xs, max }: { xs: number[]; max: number }) {
-  if (xs.length < 2) return null;
-  const w = 100, h = 26;
-  const pts = xs.map((v, i) => `${(i / (xs.length - 1)) * w},${h - (Math.min(v, max) / max) * (h - 2) - 1}`).join(" ");
-  return <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true"><polyline points={pts} fill="none" stroke="var(--plum)" strokeWidth="1.5" /></svg>;
-}
+const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 
-const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
-
-export default async function Home() {
-  const { data } = await db().from("reels").select("*").order("created_at", { ascending: false }).limit(200);
+export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const { view = "all" } = await searchParams;
+  const { data } = await db().from("reels").select("*").order("created_at", { ascending: false }).limit(300);
   const reels = (data ?? []) as Reel[];
-  const scored = reels.filter((r) => r.report && r.metrics).slice(0, 20).reverse();
-  const ttp = scored.map((r) => r.report!.time_to_product_s ?? 5);
-  const sharp = scored.map((r) => r.metrics!.sharpness);
-  const readyRate = scored.length ? Math.round((100 * scored.filter((r) => r.report!.verdict === "ready").length) / scored.length) : null;
-  const saves = scored.map((r) => r.insights?.saved ?? 0);
+  const { bar, mid, n: barN, source } = computeBar(reels);
+  const scored = reels.filter((r) => r.report && r.metrics).map((r) => ({ r, s: scoreDims(r.report!, r.metrics!, r.caption), e: rates(r.insights, r.metrics!.duration_s) }));
+  const withTag = scored.map((x) => ({ ...x, tag: tagFor(x.s, bar, mid) }));
+  const posted = withTag.filter((x) => x.r.drive_file_id.startsWith("ig:"));
+  const latest = withTag[0];
+  const raising = withTag.length ? Math.round((100 * withTag.filter((x) => x.tag === "raises").length) / withTag.length) : 0;
+  const organic = posted.filter((x) => x.e && !x.e.boosted);
+  const saveRates = organic.map((x) => x.e!.saveRate);
+  const pendingN = reels.filter((r) => r.status === "pending").length;
 
-  // What actually worked: for each check, median saves when it passed vs failed, over every posted reel with insights.
-  const posted = reels.filter((r) => r.report && r.insights && typeof r.insights.saved === "number");
-  const lifts = posted.length >= 6
-    ? posted[0].report!.checks.map((c) => {
-        const pass = posted.filter((r) => r.report!.checks.find((x) => x.name === c.name)?.pass).map((r) => r.insights!.saved);
-        const fail = posted.filter((r) => !r.report!.checks.find((x) => x.name === c.name)?.pass).map((r) => r.insights!.saved);
-        return { name: c.name, pass: med(pass), fail: med(fail), n: pass.length, m: fail.length };
-      }).filter((l) => l.n >= 3 && l.m >= 3).sort((a, b) => ((b.pass ?? 0) - (b.fail ?? 0)) - ((a.pass ?? 0) - (a.fail ?? 0)))
-    : [];
+  // Which dimensions actually pay: median saves when a posted reel is at or above the bar on that dimension vs below.
+  const lifts = organic.length >= 6 ? DIMS.map((d) => {
+    const above = organic.filter((x) => x.s[d.key] >= bar[d.key]).map((x) => x.e!.saveRate);
+    const below = organic.filter((x) => x.s[d.key] < bar[d.key]).map((x) => x.e!.saveRate);
+    return { label: d.label, above: med(above), below: med(below), na: above.length, nb: below.length };
+  }).filter((l) => l.na >= 2 && l.nb >= 2).sort((a, b) => (b.above - b.below) - (a.above - a.below)) : [];
+
+  const shown = withTag.filter((x) => view === "all" || (view === "instagram" ? x.r.drive_file_id.startsWith("ig:") : !x.r.drive_file_id.startsWith("ig:")));
+  const queue = reels.filter((r) => !r.report && (view === "all" || (view === "instagram") === r.drive_file_id.startsWith("ig:")));
 
   return (
     <>
-      <h1>Every reel, checked before it posts</h1>
-      <p className="muted">Drafts go in the Drive folder “1. To review”. Posted reels come in from Instagram with their real saves. Same rubric for both, so the bar is one number.</p>
+      <div className="kpis">
+        <div className="kpi"><small>Reels analysed</small><b>{withTag.length}</b><span>{pendingN} waiting</span></div>
+        <div className="kpi"><small>Your bar</small><b>{bar.overall}</b><span>p75 of {barN} {source === "instagram" ? "posted reels" : "reels"}</span></div>
+        <div className="kpi"><small>Raising the bar</small><b>{raising}%</b><span>of analysed reels</span></div>
+        <div className="kpi"><small>Save rate</small><b>{med(saveRates)}</b><span>saves per 1k views, organic median</span></div>
+      </div>
 
-      {scored.length > 0 && (
-        <div className="stats">
-          <div className="stat"><b>{med(ttp)?.toFixed(1)}s</b><small>median time to product, last {scored.length}</small><Spark xs={ttp} max={5} /></div>
-          <div className="stat"><b>{med(sharp)}</b><small>median sharpness /100</small><Spark xs={sharp} max={100} /></div>
-          <div className="stat"><b>{readyRate}%</b><small>ready on first upload</small></div>
-          {saves.some((s) => s > 0) && <div className="stat"><b>{saves.reduce((a, b) => a + b, 0)}</b><small>saves on posted reels</small><Spark xs={saves} max={Math.max(...saves, 1)} /></div>}
+      <section className="hero">
+        <div className="card radarcard">
+          <div className="cardhead"><b>Latest vs your bar</b><span className="legend"><i style={{ background: "var(--gold)" }} />latest <i style={{ border: "1px dashed var(--plum)" }} />bar (p75)</span></div>
+          {latest ? <Radar scores={latest.s} bar={bar} size={320} /> : <div className="empty small">Analyse a reel to see the radar.</div>}
+          {latest && <div className="muted small">{latest.r.name}</div>}
         </div>
-      )}
-
-      {lifts.length > 0 && (
-        <div className="bar">
-          <b>What earned saves on your {posted.length} posted reels</b>
-          <p className="muted" style={{ margin: "4px 0 10px" }}>Median saves when a check passed vs failed. The biggest gaps are the rules that matter for Sri Varuni; tighten those first.</p>
-          <table>
-            <thead><tr><th>Check</th><th>Passed</th><th>Failed</th><th>Reels</th></tr></thead>
-            <tbody>{lifts.map((l) => <tr key={l.name}><td>{l.name}</td><td>{l.pass}</td><td>{l.fail}</td><td>{l.n}/{l.m}</td></tr>)}</tbody>
+        <div className="card">
+          <div className="cardhead"><b>The bar, by dimension</b><span className="muted small">p75 of your posted reels</span></div>
+          <table className="dims">
+            <tbody>
+              {DIMS.map((d) => (
+                <tr key={d.key}>
+                  <td><b>{d.label}</b><div className="muted small">{d.help}</div></td>
+                  <td className="num">{bar[d.key]}</td>
+                  <td className="barcell"><div className="track"><div className="fill" style={{ width: `${bar[d.key]}%` }} />{latest && <div className="dot" style={{ left: `${latest.s[d.key]}%` }} />}</div></td>
+                </tr>
+              ))}
+            </tbody>
           </table>
+          {lifts.length > 0 && (
+            <>
+              <div className="cardhead" style={{ marginTop: 18 }}><b>What earned saves</b><span className="muted small">saves per 1k views, at bar vs below, organic only</span></div>
+              <table className="lifts"><tbody>{lifts.slice(0, 4).map((l) => <tr key={l.label}><td>{l.label}</td><td className="num up">{l.above}</td><td className="num">{l.below}</td></tr>)}</tbody></table>
+            </>
+          )}
         </div>
-      )}
+      </section>
 
-      {reels.length === 0 ? (
-        <div className="empty">Nothing here yet. Press “Import posted reels” to score what is already on Instagram, or drop a draft in “1. To review” on Drive.</div>
+      <div className="tabs">
+        {[["all", "All"], ["instagram", "Posted on Instagram"], ["drafts", "Drive drafts"]].map(([k, l]) => <a key={k} href={`/?view=${k}`} className={view === k ? "on" : ""}>{l}</a>)}
+      </div>
+
+      {shown.length === 0 && queue.length === 0 ? (
+        <div className="empty">Nothing here yet. Import from Instagram, then press Analyze.</div>
       ) : (
-        <div className="list">
-          {reels.map((r) => {
-            const first = r.frames?.[r.report?.product_frames?.[0] ?? 0]?.src;
-            const fails = r.report?.checks.filter((c) => !c.pass).map((c) => c.name).slice(0, 2).join(", ");
+        <div className="grid">
+          {shown.map(({ r, s, tag, e }) => {
+            const thumb = r.frames?.[r.report?.product_frames?.[0] ?? 0]?.src;
             return (
-              <a className="row" key={r.id} href={`/reel/${r.id}`}>
-                {first ? <img src={first} alt="" /> : <div className="thumb" />}
-                <div>
-                  <div className="name">{r.name}</div>
-                  <div className="facts">
-                    {r.report ? <>Product at {r.report.time_to_product_s === null ? "never" : `${r.report.time_to_product_s.toFixed(1)}s`} · sharpness {r.metrics?.sharpness} · {r.metrics?.duration_s}s{fails ? ` · fix: ${fails}` : ""}{r.insights?.saved !== undefined ? ` · ${r.insights.saved} saves` : ""}</> : r.error ? r.error.slice(0, 140) : r.status === "processing" ? "Analysing now" : "Waiting for the next scan"}
-                  </div>
+              <a className="tile" key={r.id} href={`/reel/${r.id}`}>
+                <div className="tilehead">
+                  {thumb ? <img src={thumb} alt="" /> : <div className="thumb" />}
+                  <div className="mini"><Radar scores={s} bar={bar} size={120} labels={false} /></div>
                 </div>
-                <div className="pillcol"><span className={`pill ${r.status}`}>{r.status === "ready" ? `Ready ${r.report?.score}` : r.status === "fix" ? `Fix ${r.report?.score}` : r.status}</span></div>
+                <div className="tilebody">
+                  <div className="tiletitle">{r.name}</div>
+                  <div className="tagrow"><div className={`tag ${tag}`}>{TAG_LABEL[tag]}</div>{e?.boosted && <div className="tag boosted">Boosted</div>}</div>
+                  <div className="tilefacts"><span><b>{s.overall}</b> score</span>{e && <span><b>{e.saveRate}</b> saves/1k</span>}{e?.watchThrough != null && <span><b>{e.watchThrough}%</b> watched</span>}</div>
+                </div>
               </a>
             );
           })}
+          {queue.map((r) => (
+            <a className="tile queued" key={r.id} href={`/reel/${r.id}`}>
+              <div className="tilebody">
+                <div className="tiletitle">{r.name}</div>
+                <div className={`tag ${r.status}`}>{r.status === "pending" ? "Waiting for Analyze" : r.status === "processing" ? "Analysing" : r.status === "error" ? "Skipped" : "Fix"}</div>
+                {r.error && <div className="muted small">{r.error.slice(0, 120)}</div>}
+              </div>
+            </a>
+          ))}
         </div>
       )}
     </>

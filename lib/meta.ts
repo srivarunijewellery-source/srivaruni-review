@@ -55,3 +55,23 @@ export async function recentReels(limit = 60): Promise<IgPost[]> {
   }
   return out.slice(0, limit);
 }
+
+/** Video file for one media id, or null when Instagram will not serve it (usually licensed music). */
+export async function mediaUrl(mediaId: string): Promise<string | null> {
+  const j = await get(`/${mediaId}?fields=media_url,media_type`);
+  return j.media_url ?? null;
+}
+
+/** Media ids that have ever been run as ads. Needs META_AD_ACCOUNT_ID (digits only) and ads_read on the token. */
+export async function boostedMediaIds(): Promise<Set<string>> {
+  const acct = process.env.META_AD_ACCOUNT_ID;
+  if (!acct) return new Set();
+  const out = new Set<string>();
+  let url: string | null = `/act_${acct}/ads?fields=creative{effective_instagram_media_id,instagram_permalink_url}&limit=200`;
+  for (let page = 0; url && page < 5; page++) {
+    const j: { data: { creative?: { effective_instagram_media_id?: string } }[]; paging?: { next?: string } } = await get(url);
+    for (const a of j.data) if (a.creative?.effective_instagram_media_id) out.add(a.creative.effective_instagram_media_id);
+    url = j.paging?.next ?? null;
+  }
+  return out;
+}

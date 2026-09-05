@@ -26,6 +26,13 @@ Videos are never stored by the app. They live in the editor's Drive; the app kee
 5. **Apps Script**: paste `scripts/apps-script.gs`, set BASE and PASSWORD, add the two time triggers.
 6. **Meta (do this on day one)**: developers.facebook.com → your app → Graph API Explorer → token with `instagram_basic`, `instagram_manage_insights`, `pages_read_engagement` → exchange for a long-lived token. `IG_USER_ID` is the Instagram Business Account id (Business Suite → settings, or `/me/accounts?fields=instagram_business_account`).
 
+## How the team uses it
+
+- **Import from Instagram** registers every posted reel (fast, no analysis).
+- **Scan Drive** registers drafts from "1. To review" and bounces anything over 100 MB.
+- **Analyze** works through the queue one reel at a time. Press Stop any time.
+- Every analysed reel is scored on seven dimensions (hook speed, clarity, message, pacing, light, length, caption). The **bar** is the 75th percentile of your posted reels on each. Tags: Raises / Meets / Below the bar.
+
 ## Day one: score what you already posted
 
 Press "Import posted reels" (or let the `importPosted` trigger run). Each call scores one reel from Instagram with the same rubric and joins its real saves, reach and watch time. After 30 or so, the dashboard shows which checks actually moved saves for your account. That table is the bar; raise `SHARPNESS_MIN` and the rules in `lib/score.ts` toward what your best reels already do.

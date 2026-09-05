@@ -4,7 +4,9 @@ const BASE = "https://srivaruni-review.vercel.app"; // your Vercel URL
 const PASSWORD = "PASTE_APP_PASSWORD";
 
 function scan() {
-  UrlFetchApp.fetch(BASE + "/api/scan", { method: "post", headers: { "x-app-password": PASSWORD }, muteHttpExceptions: true });
+  const h = { method: "post", headers: { "x-app-password": PASSWORD }, muteHttpExceptions: true };
+  UrlFetchApp.fetch(BASE + "/api/scan", h);     // register new Drive drafts
+  UrlFetchApp.fetch(BASE + "/api/analyze", h);  // analyse one pending reel
 }
 function insights() {
   UrlFetchApp.fetch(BASE + "/api/insights", { method: "post", headers: { "x-app-password": PASSWORD }, muteHttpExceptions: true });

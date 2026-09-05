@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Res = Record<string, unknown>;
@@ -8,37 +8,42 @@ const post = async (path: string): Promise<Res> => {
   try { return await r.json(); } catch { return { error: `HTTP ${r.status}` }; }
 };
 
-export default function Actions() {
+export default function Actions({ pending }: { pending: number }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<"" | "scan" | "import">("");
+  const [busy, setBusy] = useState<"" | "import" | "scan" | "analyze">("");
   const [msg, setMsg] = useState("");
+  const stopRef = useRef(false);
 
-  async function scan() {
-    setBusy("scan"); setMsg("Checking Drive…");
-    const r = await post("/api/scan");
-    setMsg(r.error ? `Scan failed: ${r.error}` : r.processed ? `${r.processed}: ${r.verdict === "ready" ? "ready" : "fix"}${r.score ? ` (${r.score})` : ""}` : `Inbox checked, ${r.registered ?? 0} new`);
+  async function run(kind: "import" | "scan") {
+    setBusy(kind); setMsg(kind === "import" ? "Fetching posted reels from Instagram…" : "Checking the Drive folder…");
+    const r = await post(`/api/${kind}`);
+    setMsg(r.error ? `Failed: ${r.error}` : r.skipped ? String(r.skipped) : `${r.added} new, ${r.pending} waiting for analysis${r.bounced ? `, ${r.bounced} bounced for size` : ""}`);
     setBusy(""); router.refresh();
   }
 
-  // Import runs one reel per request; keep calling until Meta says there is nothing left.
-  async function importAll() {
-    setBusy("import"); let n = 0;
-    for (let i = 0; i < 60; i++) {
-      setMsg(n ? `Imported ${n}, fetching next…` : "Fetching your posted reels…");
-      const r = await post("/api/import");
-      if (r.error) { setMsg(`Import stopped: ${r.error}`); break; }
-      if (r.skipped) { setMsg(String(r.skipped)); break; }
-      if (r.done) { setMsg(n ? `Done. ${n} reels scored.` : "Everything already imported."); break; }
-      n++; setMsg(`Imported ${n}: ${String(r.processed).slice(0, 40)} · score ${r.score}${r.saves != null ? ` · ${r.saves} saves` : ""}`);
+  // One reel per request, looping until the queue is empty or the user stops it.
+  async function analyze() {
+    setBusy("analyze"); stopRef.current = false; let n = 0, skipped = 0, failed = 0;
+    for (let i = 0; i < 200; i++) {
+      setMsg(`Analysing… ${n} done${skipped ? `, ${skipped} skipped` : ""}${failed ? `, ${failed} failed` : ""}`);
+      const r = await post("/api/analyze");
+      if (r.error && !r.processed) { setMsg(`Stopped: ${r.error}`); break; }
+      if (r.done) { setMsg(`Done. ${n} analysed${skipped ? `, ${skipped} skipped (no video from Instagram)` : ""}${failed ? `, ${failed} failed` : ""}.`); break; }
+      if (r.skipped) skipped++; else if (r.error) failed++; else n++;
       router.refresh();
+      if (failed >= 5) { setMsg(`Stopped after 5 failures. Last: ${r.error}`); break; }
+      if (stopRef.current) { setMsg(`Paused. ${n} analysed.`); break; }
     }
     setBusy(""); router.refresh();
   }
 
   return (
     <div className="actions">
-      <button className="ghost" disabled={!!busy} onClick={importAll}>{busy === "import" ? "Importing…" : "Import posted reels"}</button>
-      <button disabled={!!busy} onClick={scan}>{busy === "scan" ? "Scanning…" : "Scan Drive now"}</button>
+      <button className="ghost" disabled={!!busy} onClick={() => run("import")}>{busy === "import" ? "Importing…" : "Import from Instagram"}</button>
+      <button className="ghost" disabled={!!busy} onClick={() => run("scan")}>{busy === "scan" ? "Scanning…" : "Scan Drive"}</button>
+      {busy === "analyze"
+        ? <button onClick={() => { stopRef.current = true; }}>Stop</button>
+        : <button disabled={!!busy || pending === 0} onClick={analyze}>Analyze {pending > 0 ? `(${pending})` : ""}</button>}
       {msg && <span className={`status${busy ? " live" : ""}`}>{msg}</span>}
     </div>
   );
