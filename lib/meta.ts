@@ -3,7 +3,9 @@ const token = () => process.env.META_ACCESS_TOKEN!;
 export const metaReady = () => !!(process.env.META_ACCESS_TOKEN && process.env.IG_USER_ID);
 
 async function get(path: string) {
-  const res = await fetch(`${G}${path}${path.includes("?") ? "&" : "?"}access_token=${token()}`);
+  // Paging links from Meta are absolute and already carry the token; use them as-is.
+  const url = path.startsWith("http") ? path : `${G}${path}${path.includes("?") ? "&" : "?"}access_token=${token()}`;
+  const res = await fetch(url);
   const j = await res.json();
   if (j.error) throw new Error(j.error.message);
   return j;
@@ -18,7 +20,7 @@ export async function mediaIdForPermalink(permalink: string): Promise<string | n
     const j: { data: { id: string; permalink: string }[]; paging?: { next?: string } } = await get(url);
     const hit = j.data.find((m) => m.permalink.includes(`/${code}/`));
     if (hit) return hit.id;
-    url = j.paging?.next ? j.paging.next.replace(G, "").replace(/([?&])access_token=[^&]+/, "$1") : null;
+    url = j.paging?.next ?? null;
   }
   return null;
 }
@@ -49,7 +51,7 @@ export async function recentReels(limit = 60): Promise<IgPost[]> {
   while (url && out.length < limit) {
     const j: { data: IgPost[]; paging?: { next?: string } } = await get(url);
     out.push(...j.data.filter((m) => m.media_type === "VIDEO"));
-    url = j.paging?.next ? j.paging.next.replace(G, "").replace(/([?&])access_token=[^&]+/, "$1") : null;
+    url = j.paging?.next ?? null;
   }
   return out.slice(0, limit);
 }

@@ -68,7 +68,7 @@ export default async function Home() {
                 <div>
                   <div className="name">{r.name}</div>
                   <div className="facts">
-                    {r.report ? <>Product at {r.report.time_to_product_s === null ? "never" : `${r.report.time_to_product_s.toFixed(1)}s`} · sharpness {r.metrics?.sharpness} · {r.metrics?.duration_s}s{fails ? ` · fix: ${fails}` : ""}{r.insights?.saved !== undefined ? ` · ${r.insights.saved} saves` : ""}</> : r.status === "error" ? r.error?.slice(0, 120) : "Waiting for the next scan"}
+                    {r.report ? <>Product at {r.report.time_to_product_s === null ? "never" : `${r.report.time_to_product_s.toFixed(1)}s`} · sharpness {r.metrics?.sharpness} · {r.metrics?.duration_s}s{fails ? ` · fix: ${fails}` : ""}{r.insights?.saved !== undefined ? ` · ${r.insights.saved} saves` : ""}</> : r.error ? r.error.slice(0, 140) : r.status === "processing" ? "Analysing now" : "Waiting for the next scan"}
                   </div>
                 </div>
                 <div className="pillcol"><span className={`pill ${r.status}`}>{r.status === "ready" ? `Ready ${r.report?.score}` : r.status === "fix" ? `Fix ${r.report?.score}` : r.status}</span></div>

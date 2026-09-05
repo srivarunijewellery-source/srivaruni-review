@@ -32,7 +32,7 @@ Press "Import posted reels" (or let the `importPosted` trigger run). Each call s
 
 ## Editor workflow
 
-1. Export the reel at 1080p (keeps files under ~60 MB so the 60 s function limit holds).
+1. Export the reel at 1080p H.264, under 100 MB. 4K masters are bounced to "2. Fix" unanalysed; Instagram re-encodes to 1080p anyway.
 2. Upload to "1. To review". Put the caption in the file's Description (right-click → File information → Details).
 3. Wait for the report. Fix what it lists, re-upload. When it says ready, post.
 4. Paste the Instagram link on the reel's dashboard page. Insights start flowing the next day.

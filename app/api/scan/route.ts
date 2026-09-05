@@ -22,12 +22,33 @@ async function handler(req: NextRequest) {
     await sb.from("reels").upsert({ drive_file_id: f.id, name: f.name, caption: f.description ?? null }, { onConflict: "drive_file_id", ignoreDuplicates: true });
   }
 
+  // 1b. Anything stuck in "processing" for over 5 minutes died on the function timeout. Send it to Fix with a clear reason.
+  const stale = new Date(Date.now() - 5 * 60e3).toISOString();
+  const { data: dead } = await sb.from("reels").select("id,drive_file_id,name").eq("status", "processing").lt("updated_at", stale).not("drive_file_id", "like", "ig:%");
+  for (const d of (dead ?? []) as Pick<Reel, "id" | "drive_file_id" | "name">[]) {
+    const msg = "Analysis timed out. Export this reel at 1080p H.264 (under 100 MB) and upload again.";
+    await sb.from("reels").update({ status: "fix", error: msg, updated_at: new Date().toISOString() }).eq("id", d.id);
+    await setDescription(d.drive_file_id, msg).catch(() => {});
+    await move(d.drive_file_id, FOLDERS.inbox, FOLDERS.fix).catch(() => {});
+  }
+
   // 2. Claim one pending reel.
   const { data: pending } = await sb.from("reels").select("*").eq("status", "pending").not("drive_file_id", "like", "ig:%").order("created_at").limit(1);
   const reel = pending?.[0] as Reel | undefined;
   if (!reel) return NextResponse.json({ registered: inbox.length, processed: null });
   const { data: claimed } = await sb.from("reels").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", reel.id).eq("status", "pending").select("id");
   if (!claimed?.length) return NextResponse.json({ registered: inbox.length, processed: null, note: "claimed by another run" });
+
+  // 2b. Size gate: 4K masters cannot be decoded inside the function limit. Tell the editor instead of timing out.
+  const MAX_BYTES = +(process.env.MAX_VIDEO_MB ?? 100) * 1024 * 1024;
+  const size = +(inbox.find((f) => f.id === reel.drive_file_id)?.size ?? 0);
+  if (size > MAX_BYTES) {
+    const msg = `File is ${Math.round(size / 1048576)} MB. Export at 1080p H.264 (under ${process.env.MAX_VIDEO_MB ?? 100} MB) and upload again. Instagram re-encodes to 1080p anyway.`;
+    await sb.from("reels").update({ status: "fix", error: msg, updated_at: new Date().toISOString() }).eq("id", reel.id);
+    await setDescription(reel.drive_file_id, msg).catch(() => {});
+    await move(reel.drive_file_id, FOLDERS.inbox, FOLDERS.fix);
+    return NextResponse.json({ registered: inbox.length, processed: reel.name, verdict: "fix", reason: msg });
+  }
 
   const work = await mkdtemp(path.join(os.tmpdir(), "sv-"));
   try {

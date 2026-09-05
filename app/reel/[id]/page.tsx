@@ -16,7 +16,7 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
     <>
       <a href="/" className="muted">← All reels</a>
       <h1>{r.name}</h1>
-      {!rep && <p className="muted">{r.status === "error" ? `Analysis failed: ${r.error}` : "Not analysed yet. The next scan picks it up."}</p>}
+      {!rep && <p className="muted">{r.error ?? (r.status === "processing" ? "Analysing now." : "Not analysed yet. The next scan picks it up.")}</p>}
 
       {rep && m && (
         <>

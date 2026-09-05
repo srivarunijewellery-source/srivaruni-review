@@ -9,7 +9,7 @@ import type { Metrics } from "./db";
 
 const run = promisify(execFile);
 const FPS = 4; // sample rate; 0.25s resolution on time-to-product
-const MAX_S = 30; // ponytail: reels past 30s are already failing the length check
+const MAX_S = 20; // ponytail: reels past 15s already fail the length check; 20s covers the verdict and keeps 1080p decode under the function limit
 
 export type Frame = { t: number; jpg: Buffer; sharp: number; bright: number };
 
