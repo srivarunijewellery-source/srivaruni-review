@@ -21,30 +21,34 @@ export default function Actions({ pending }: { pending: number }) {
     setBusy(""); router.refresh();
   }
 
-  // One reel per request, looping until the queue is empty or the user stops it.
+  // Three reels at a time; each request claims its own reel server-side so nothing is processed twice.
+  const LANES = 3;
   async function analyze() {
-    setBusy("analyze"); stopRef.current = false; let n = 0, skipped = 0, failed = 0;
-    for (let i = 0; i < 200; i++) {
-      setMsg(`Analysing… ${n} done${skipped ? `, ${skipped} skipped` : ""}${failed ? `, ${failed} failed` : ""}`);
-      const r = await post("/api/analyze");
-      if (r.error && !r.processed) { setMsg(`Stopped: ${r.error}`); break; }
-      if (r.done) { setMsg(`Done. ${n} analysed${skipped ? `, ${skipped} skipped (no video from Instagram)` : ""}${failed ? `, ${failed} failed` : ""}.`); break; }
-      if (r.skipped) skipped++; else if (r.error) failed++; else n++;
-      router.refresh();
-      if (failed >= 5) { setMsg(`Stopped after 5 failures. Last: ${r.error}`); break; }
-      if (stopRef.current) { setMsg(`Paused. ${n} analysed.`); break; }
-    }
+    setBusy("analyze"); stopRef.current = false; let n = 0, skipped = 0, failed = 0, done = false;
+    const lane = async () => {
+      while (!done && !stopRef.current && failed < 5) {
+        const r = await post("/api/analyze");
+        if (r.error && !r.processed) { setMsg(`Stopped: ${r.error}`); done = true; return; }
+        if (r.done) { done = true; return; }
+        if (r.skipped) skipped++; else if (r.error) failed++; else n++;
+        setMsg(`Analysing… ${n} done${skipped ? `, ${skipped} skipped` : ""}${failed ? `, ${failed} failed` : ""}`);
+        router.refresh();
+      }
+    };
+    setMsg("Analysing…");
+    await Promise.all(Array.from({ length: LANES }, lane));
+    setMsg(stopRef.current ? `Paused. ${n} analysed.` : failed >= 5 ? `Stopped after 5 failures.` : `Done. ${n} analysed${skipped ? `, ${skipped} skipped (no video from Instagram)` : ""}${failed ? `, ${failed} failed` : ""}.`);
     setBusy(""); router.refresh();
   }
 
   async function reanalyze() {
-    if (!confirm("Queue every analysed Instagram reel again? Use after a rubric change. Takes ~40s per reel.")) return;
+    if (!confirm("Re-score every analysed reel with the current rubric? Uses stored frames, about 10s per reel.")) return;
     setBusy("scan"); const r = await post("/api/reanalyze"); setMsg(r.error ? `Failed: ${r.error}` : `${r.queued} reels queued. Press Analyze.`); setBusy(""); router.refresh();
   }
 
   return (
     <div className="actions">
-      <button className="link" disabled={!!busy} onClick={reanalyze} title="Queue all Instagram reels again after a rubric change">Re-analyze all</button>
+      <button className="link" disabled={!!busy} onClick={reanalyze} title="Re-score every reel with the current rubric, from stored frames">Re-score all</button>
       <button className="ghost" disabled={!!busy} onClick={() => run("import")}>{busy === "import" ? "Importing…" : "Import from Instagram"}</button>
       <button className="ghost" disabled={!!busy} onClick={() => run("scan")}>{busy === "scan" ? "Scanning…" : "Scan Drive"}</button>
       {busy === "analyze"

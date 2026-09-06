@@ -2,14 +2,15 @@ import type { Reel, Report, Metrics } from "./db";
 
 // Seven things that make a jewellery reel work on Instagram, each 0-100. The bar is the 75th percentile of your own posted reels.
 export const DIMS = [
-  { key: "hook", label: "Hook speed", weight: 0.22, help: "How fast the jewellery fills the frame" },
-  { key: "clarity", label: "Clarity", weight: 0.18, help: "Sharpness on the product frames" },
-  { key: "message", label: "Message", weight: 0.18, help: "Price, reason to stay, Telugu line by second 3" },
-  { key: "product", label: "Product time", weight: 0.1, help: "Share of the reel with jewellery filling the frame" },
-  { key: "pacing", label: "Pacing", weight: 0.08, help: "Angle changes per 10 seconds" },
-  { key: "light", label: "Light", weight: 0.08, help: "Exposure on the product" },
-  { key: "length", label: "Length", weight: 0.06, help: "7 to 15 seconds" },
-  { key: "caption", label: "Caption", weight: 0.1, help: "WhatsApp CTA and clean hashtags" },
+  { key: "hook", label: "Hook speed", weight: 0.2, help: "How fast the jewellery fills the frame" },
+  { key: "clarity", label: "Clarity", weight: 0.15, help: "Sharpness on the product frames" },
+  { key: "richness", label: "Richness", weight: 0.13, help: "Premium look: neutral cast, shine, sparkle, clean frame" },
+  { key: "message", label: "Message", weight: 0.15, help: "Price, reason to stay, Telugu line by second 3" },
+  { key: "product", label: "Product time", weight: 0.09, help: "Share of the reel with jewellery filling the frame" },
+  { key: "pacing", label: "Pacing", weight: 0.07, help: "Angle changes per 10 seconds" },
+  { key: "light", label: "Light", weight: 0.07, help: "Exposure on the product" },
+  { key: "length", label: "Length", weight: 0.05, help: "7 to 15 seconds" },
+  { key: "caption", label: "Caption", weight: 0.09, help: "WhatsApp CTA and clean hashtags" },
 ] as const;
 export type DimKey = (typeof DIMS)[number]["key"];
 export type Scores = Record<DimKey, number> & { overall: number };
@@ -32,7 +33,15 @@ export function scoreDims(r: Report, m: Metrics, caption: string | null, frameCo
   const tags = (caption?.match(/#\w+/g) ?? []).length;
   const cap = clamp((hasCta ? 60 : 0) + (tags <= 5 ? 40 : tags <= 10 ? 20 : 5));
   const product = frameCount > 0 ? clamp(((r.product_frames?.length ?? 0) / frameCount) * 100 * 1.25) : 50; // 80% of frames = full marks
-  const s = { hook, clarity, message, product, pacing, light, length, caption: cap };
+  // Richness: 60% judged premium feel, 40% measured. Measured part penalises a yellow cast and rewards contrast and sparkle in a sane range.
+  const judged = r.richness?.score ?? 50;
+  const castPenalty = m.warmth != null ? clamp((m.warmth - 25) * 2) : 0; // warmth 25 is neutral-warm; 75 is unmistakably yellow
+  const contrastScore = m.contrast != null ? clamp(((m.contrast - 25) / 40) * 100) : 50;
+  const sparkleScore = m.sparkle != null ? clamp((m.sparkle / 2) * 100) : 50; // 2% specular pixels reads as sparkle
+  const measured = clamp(0.5 * (100 - castPenalty) + 0.3 * contrastScore + 0.2 * sparkleScore);
+  const richness = 0.6 * judged + 0.4 * measured;
+  const R = Math.round;
+  const s = { hook: R(hook), clarity: R(clarity), richness: R(richness), message: R(message), product: R(product), pacing: R(pacing), light: R(light), length: R(length), caption: R(cap) };
   const overall = Math.round(DIMS.reduce((a, dd) => a + s[dd.key] * dd.weight, 0));
   return { ...s, overall };
 }

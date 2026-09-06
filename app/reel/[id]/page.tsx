@@ -2,6 +2,7 @@ import { db, type Reel } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates, label } from "@/lib/dimensions";
 import Radar from "../../radar";
+import { fitModel } from "@/lib/model";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,9 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
   const s = rep && m ? scoreDims(rep, m, r.caption, r.frames?.length ?? 0) : null;
   const tag = s ? tagFor(s, bar, mid) : null;
   const e = rates(r.insights, m?.duration_s);
+  const { fit, rows: modelRows } = fitModel((all ?? []) as Reel[]);
+  const actualEng = modelRows.find((x) => x.r.id === r.id)?.eng ?? null;
+  const predictedEng = fit && s ? fit.predict(r, s) : null;
   const product = new Set(rep?.product_frames ?? []);
   const firstProduct = rep?.product_frames?.[0];
 
@@ -34,6 +38,7 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
                 <div>
                   <div className={`tag ${tag}`}>{TAG_LABEL[tag]}</div>
                   <div className="muted small">bar {bar.overall} · p75 of {barN} reels</div>
+                  {(actualEng != null || predictedEng != null) && <div className="small" style={{ marginTop: 4 }}>{actualEng != null && <><b>{actualEng}</b> engagement</>}{actualEng != null && predictedEng != null && " · "}{predictedEng != null && <><b>{predictedEng}</b> predicted</>}</div>}
                 </div>
               </div>
               <Radar scores={s} bar={bar} size={320} />
@@ -81,6 +86,13 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
                 <div className="tag subject">{label(rep.subject.colour)}</div>
                 {rep.subject.occasion && <div className="tag subject">{rep.subject.occasion}</div>}
               </div>
+            </div>
+          )}
+          {rep.richness && (
+            <div className="card">
+              <div className="cardhead"><b>Richness</b><span className="muted small">{rep.richness.look} · judged {rep.richness.score}/100 · cast {m.warmth ?? "–"} · contrast {m.contrast ?? "–"} · sparkle {m.sparkle ?? "–"}%</span></div>
+              {rep.richness.issues.length > 0 && <div className="tagrow">{rep.richness.issues.map((i) => <div key={i} className="tag below">{i.replace(/_/g, " ")}</div>)}</div>}
+              {rep.richness.fix && <p style={{ marginTop: 8 }}>{rep.richness.fix}</p>}
             </div>
           )}
           {r.insights?.ad_spend != null && (

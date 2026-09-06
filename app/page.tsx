@@ -1,6 +1,7 @@
 import { db, type Reel } from "@/lib/db";
 import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates, pearson, strength, label } from "@/lib/dimensions";
 import Radar from "./radar";
+import { fitModel } from "@/lib/model";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
   const boostedReels = withTag.filter((x) => x.e?.boosted && x.r.insights?.ad_spend);
   const cpf = boostedReels.filter((x) => x.r.insights?.ad_cost_per_follow).map((x) => x.r.insights!.ad_cost_per_follow);
 
+  // The equation: engagement ~ inputs, fitted on organic reels.
+  const { fit, rows: modelRows } = fitModel(reels);
+  const engById = new Map(modelRows.map((x) => [x.r.id, x.eng]));
+  const predicted = (x: { r: Reel; s: ReturnType<typeof scoreDims> }) => (fit ? fit.predict(x.r, x.s) : null);
+
   const shown = withTag.filter((x) => view === "all" || (view === "instagram" ? x.r.drive_file_id.startsWith("ig:") : !x.r.drive_file_id.startsWith("ig:")));
   const queue = reels.filter((r) => !r.report && (view === "all" || (view === "instagram") === r.drive_file_id.startsWith("ig:")));
 
@@ -58,7 +64,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
         <div className="kpi"><small>Reels analysed</small><b>{withTag.length}</b><span>{pendingN} waiting</span></div>
         <div className="kpi"><small>Your bar</small><b>{bar.overall}</b><span>p75 of {barN} {source === "instagram" ? "posted reels" : "reels"}</span></div>
         <div className="kpi"><small>Raising the bar</small><b>{raising}%</b><span>of analysed reels</span></div>
-        <div className="kpi"><small>Save rate</small><b>{med(saveRates)}</b><span>saves per 1k views, organic median</span></div>
+        <div className="kpi"><small>Model fit</small><b>{fit ? `R² ${fit.r2}` : "–"}</b><span>{fit ? `out-of-sample, ${fit.n} organic reels` : `needs 12 organic reels, have ${organic.length}`}</span></div>
       </div>
 
       <section className="hero">
@@ -110,7 +116,33 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
         )}
       </details>
 
-      <details className="card" open={organic.length >= 8}>
+      <details className="card" open={!!fit}>
+        <summary><b>The equation: what drives engagement for Sri Varuni</b><span className="muted small">{fit ? `ridge regression, λ=${fit.lambda}, leave-one-out R² ${fit.r2}, n=${fit.n}` : `needs 12 analysed organic reels, have ${organic.length}`}</span></summary>
+        {fit ? (
+          <div className="validation">
+            <div>
+              <div className="cardhead"><b>Drivers</b><span className="muted small">standardised effect on engagement score</span></div>
+              <table className="lifts">
+                <thead><tr><th>Input</th><th className="num">Effect</th><th className="num">r</th></tr></thead>
+                <tbody>{fit.drivers.slice(0, 10).map((d) => <tr key={d.key}><td>{d.label}</td><td className={`num ${d.coef > 0 ? "up" : "down"}`}>{d.coef > 0 ? "+" : ""}{Math.round(d.coef)}</td><td className="num muted">{d.r ?? "–"}</td></tr>)}</tbody>
+              </table>
+              <p className="muted small" style={{ marginTop: 8 }}>Effect = change in engagement score per one standard deviation of the input, all others held. r = simple correlation. Read {fit.r2 < 0.2 ? "with caution: the fit is weak, keep adding reels" : fit.r2 < 0.5 ? "as directional: the trend is real, the sizes are rough" : "with confidence"}.</p>
+            </div>
+            <div>
+              <div className="cardhead"><b>Rubric weights</b><span className="muted small">manual vs learned from your reels</span></div>
+              <table className="lifts">
+                <thead><tr><th>Dimension</th><th className="num">Manual</th><th className="num">Learned</th></tr></thead>
+                <tbody>{DIMS.map((d) => <tr key={d.key}><td>{d.label}</td><td className="num muted">{Math.round(d.weight * 100)}%</td><td className="num">{Math.round((fit.learnedWeights[d.key] ?? 0) * 100)}%</td></tr>)}</tbody>
+              </table>
+              <p className="muted small" style={{ marginTop: 8 }}>Learned weights are the positive regression coefficients on the eight dimensions, normalised. When they stabilise across a few weeks, they replace the manual ones in <code>lib/dimensions.ts</code>.</p>
+            </div>
+          </div>
+        ) : (
+          <p className="muted">Press Analyze and let it run. The regression switches on at 12 organic reels and gets sharper with every one after.</p>
+        )}
+      </details>
+
+      <details className="card" open={organic.length >= 8 && !fit}>
         <summary><b>Does the score predict engagement?</b><span className="muted small">{organic.length} organic reels · overall score vs save rate: {overallR ?? "n/a"} ({strength(overallR)})</span></summary>
         {organic.length < 8 ? (
           <p className="muted">Needs at least 8 analysed organic reels. Press Analyze and let it run; this panel fills in by itself.</p>
@@ -149,7 +181,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
                 <div className="tilebody">
                   <div className="tiletitle">{r.name}</div>
                   <div className="tagrow"><div className={`tag ${tag}`}>{TAG_LABEL[tag]}</div>{e?.boosted && <div className="tag boosted">Boosted</div>}{r.report?.subject && <div className="tag subject">{label(r.report.subject.motif)}</div>}</div>
-                  <div className="tilefacts"><span><b>{s.overall}</b> score</span>{e && <span><b>{e.saveRate}</b> saves/1k</span>}{e?.watchThrough != null && <span><b>{e.watchThrough}%</b> watched</span>}</div>
+                  <div className="tilefacts"><span><b>{s.overall}</b> score</span>{engById.has(r.id) && <span><b>{engById.get(r.id)}</b> engagement</span>}{fit && !engById.has(r.id) && <span><b>{predicted({ r, s })}</b> predicted</span>}{e?.watchThrough != null && <span><b>{e.watchThrough}%</b> watched</span>}</div>
                 </div>
               </a>
             );

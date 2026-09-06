@@ -11,7 +11,8 @@ const run = promisify(execFile);
 const FPS = 4; // sample rate; 0.25s resolution on time-to-product
 const MAX_S = 20; // ponytail: reels past 15s already fail the length check; 20s covers the verdict and keeps 1080p decode under the function limit
 
-export type Frame = { t: number; jpg: Buffer; sharp: number; bright: number };
+export type Frame = { t: number; jpg: Buffer; sharp: number; bright: number; colour: Colour };
+export type Colour = { warmth: number; sat: number; contrast: number; sparkle: number };
 
 export async function analyze(videoPath: string, workDir: string) {
   await mkdir(workDir, { recursive: true });
@@ -39,7 +40,8 @@ export async function analyze(videoPath: string, workDir: string) {
     const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
     const thumb = await sharp(jpg).greyscale().resize(32, 56, { fit: "fill" }).raw().toBuffer();
     thumbs.push(new Uint8Array(thumb));
-    frames.push({ t: i / FPS, jpg, sharp: sharpnessScore(laplacianVariance(data, info.width, info.height)), bright: meanBrightness(data) });
+    const rgb = await sharp(jpg).resize(48, 85, { fit: "fill" }).removeAlpha().raw().toBuffer();
+    frames.push({ t: i / FPS, jpg, sharp: sharpnessScore(laplacianVariance(data, info.width, info.height)), bright: meanBrightness(data), colour: colourStats(rgb, data) });
   }
   const diffs = thumbs.slice(1).map((t, i) => frameDiff(thumbs[i], t));
   const cuts = countCuts(diffs);
@@ -64,12 +66,28 @@ export function pickForClaude(frames: Frame[]) {
   return frames.filter((f, i) => f.t < 3 || i % FPS === 0);
 }
 
-/** Frames kept for the dashboard: same selection, shrunk to 240px. */
+/** Frames kept for the dashboard and for re-scoring: same selection, shrunk to 240px, with their sharpness and colour read. */
 export async function pickForStorage(frames: Frame[]) {
-  const out: { t: number; src: string }[] = [];
+  const out: { t: number; src: string; sharp: number; colour: Colour }[] = [];
   for (const f of pickForClaude(frames)) {
     const small = await sharp(f.jpg).resize(240).jpeg({ quality: 70 }).toBuffer();
-    out.push({ t: f.t, src: `data:image/jpeg;base64,${small.toString("base64")}` });
+    out.push({ t: f.t, src: `data:image/jpeg;base64,${small.toString("base64")}`, sharp: f.sharp, colour: f.colour });
+  }
+  return out;
+}
+
+/** Rebuild Claude-ready frames from what is stored, so a rubric change never touches the video again. */
+export async function framesFromStored(stored: { t: number; src: string; sharp?: number; colour?: Colour }[], fallbackSharp: number): Promise<Frame[]> {
+  const out: Frame[] = [];
+  for (const f of stored) {
+    const jpg = Buffer.from(f.src.replace(/^data:image\/jpeg;base64,/, ""), "base64");
+    let colour = f.colour;
+    if (!colour) {
+      const grey = await sharp(jpg).greyscale().raw().toBuffer();
+      const rgb = await sharp(jpg).resize(48, 85, { fit: "fill" }).removeAlpha().raw().toBuffer();
+      colour = colourStats(rgb, grey);
+    }
+    out.push({ t: f.t, jpg, sharp: f.sharp ?? fallbackSharp, bright: 0, colour });
   }
   return out;
 }
@@ -92,3 +110,20 @@ export async function transcribe(audioPath: string | null): Promise<string | nul
 }
 
 export const cleanup = (dir: string) => rm(dir, { recursive: true, force: true });
+
+/** Colour read of a frame: yellow cast, saturation, contrast, specular sparkle. Richness is judged on the product frames only. */
+export function colourStats(rgb: Buffer, grey: Buffer): Colour {
+  let r = 0, g = 0, b = 0, sat = 0, n = rgb.length / 3;
+  for (let i = 0; i < rgb.length; i += 3) {
+    const R = rgb[i], G = rgb[i + 1], B = rgb[i + 2];
+    r += R; g += G; b += B;
+    const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+    sat += mx ? (mx - mn) / mx : 0;
+  }
+  r /= n; g /= n; b /= n;
+  // warmth: how far the average colour sits toward yellow (R+G high, B low). 0 neutral, ~40+ is a visible yellow cast.
+  const warmth = Math.round(Math.max(0, (r + g) / 2 - b));
+  let mean = 0; for (let i = 0; i < grey.length; i++) mean += grey[i]; mean /= grey.length;
+  let v = 0, hi = 0; for (let i = 0; i < grey.length; i++) { v += (grey[i] - mean) ** 2; if (grey[i] > 245) hi++; }
+  return { warmth, sat: Math.round((sat / n) * 100), contrast: Math.round(Math.sqrt(v / grey.length)), sparkle: +((100 * hi) / grey.length).toFixed(2) };
+}

@@ -8,7 +8,7 @@ export type Reel = {
   status: "pending" | "processing" | "ready" | "fix" | "error";
   metrics: Metrics | null;
   report: Report | null;
-  frames: { t: number; src: string }[] | null;
+  frames: StoredFrame[] | null;
   transcript: string | null;
   ig_media_id: string | null;
   ig_permalink: string | null;
@@ -18,6 +18,8 @@ export type Reel = {
   updated_at: string;
 };
 
+export type StoredFrame = { t: number; src: string; sharp?: number; colour?: { warmth: number; sat: number; contrast: number; sparkle: number } };
+
 export type Metrics = {
   duration_s: number;
   fps_sampled: number;
@@ -26,6 +28,10 @@ export type Metrics = {
   sharpness: number; // 0-100, median over product frames
   sharpness_first_3s: number;
   brightness: number; // 0-255 mean
+  warmth?: number; // yellow cast on product frames, 0 neutral
+  saturation?: number;
+  contrast?: number;
+  sparkle?: number; // % specular highlight pixels on product frames
   width: number;
   height: number;
 };
@@ -45,6 +51,14 @@ export type Report = {
   caption_rewrite: string;
   summary: string;
   subject?: Subject;
+  richness?: Richness;
+};
+
+export type Richness = {
+  score: number; // 0-100 premium feel as judged from the frames
+  look: "premium" | "decent" | "cheap";
+  issues: string[]; // yellow_cast, flat_light, cluttered_background, plastic_finish, dull_stones, overexposed, low_contrast, busy_frame
+  fix: string | null;
 };
 
 export type Subject = {

@@ -1,4 +1,4 @@
-import type { Check, Metrics, Report, Subject } from "./db";
+import type { Check, Metrics, Report, Subject, Richness } from "./db";
 import type { Frame } from "./video";
 
 const SHARPNESS_MIN = () => +(process.env.SHARPNESS_MIN ?? 55);
@@ -25,6 +25,7 @@ Definitions:
 - "price on screen": a rupee amount legible on the frame.
 - "reason to stay": an on-screen line or spoken line that tells the viewer why this piece matters now: an occasion, a price claim, a comparison, a scarcity line.
 - Telugu text: Telugu script visible on screen (transliterated Telugu in Latin letters also counts if clearly Telugu).
+- richness: does the jewellery look expensive on screen? Premium = neutral white balance, metal with real depth and shine, stones that sparkle, clean background, controlled highlights. Cheap = yellow or green cast over the metal, flat even light with no shine, plastic-looking finish, dull stones, busy or cluttered background, blown highlights. Judge the product frames only. Be harsh: most phone footage of gold-tone jewellery reads yellow and flat.
 
 Record your review with the report tool.`;
 
@@ -44,6 +45,17 @@ const REPORT_TOOL = {
       hooks: { type: "array", items: { type: "string" }, description: "3 first-second on-screen lines, Telugu then English in brackets, max 8 words each" },
       caption_rewrite: { type: "string", description: "Caption in house format: one line, price, occasion, 'WhatsApp: [number]' placeholder, 5 hashtags max" },
       summary: { type: "string", description: "Two sentences an editor can act on" },
+      richness: {
+        type: "object",
+        description: "Premium feel of the jewellery as shown, judged on product frames only.",
+        properties: {
+          score: { type: "integer", description: "0-100. 80+ only if it would pass for a brand catalogue shot." },
+          look: { type: "string", enum: ["premium", "decent", "cheap"] },
+          issues: { type: "array", items: { type: "string", enum: ["yellow_cast", "green_cast", "flat_light", "cluttered_background", "plastic_finish", "dull_stones", "overexposed", "low_contrast", "busy_frame"] } },
+          fix: { type: ["string", "null"], description: "One concrete shooting or grading fix, e.g. 'set white balance to daylight and add a hard key from 45° for sparkle'" },
+        },
+        required: ["score", "look", "issues", "fix"],
+      },
       subject: {
         type: "object",
         description: "What the reel shows. Subject matter drives engagement as much as craft.",
@@ -58,7 +70,7 @@ const REPORT_TOOL = {
         required: ["motif", "piece", "person", "colour", "occasion", "emotional_hook"],
       },
     },
-    required: ["time_to_product_s", "price_on_screen_s", "telugu_text_s", "reason_to_stay_s", "product_frames", "opening", "what_is_missing", "hooks", "caption_rewrite", "summary", "subject"],
+    required: ["time_to_product_s", "price_on_screen_s", "telugu_text_s", "reason_to_stay_s", "product_frames", "opening", "what_is_missing", "hooks", "caption_rewrite", "summary", "subject", "richness"],
   },
 };
 
@@ -108,6 +120,13 @@ function buildReport(ai: Record<string, unknown>, metrics: Metrics, frames: Fram
   const productIdx = Array.isArray(ai.product_frames) ? (ai.product_frames as number[]).filter((i) => frames[i]) : [];
   const productSharp = productIdx.length ? median(productIdx.map((i) => frames[i].sharp)) : metrics.sharpness;
   metrics.sharpness = productSharp;
+  const pf = productIdx.length ? productIdx.map((i) => frames[i]) : frames;
+  metrics.warmth = Math.round(median(pf.map((f) => f.colour.warmth)));
+  metrics.saturation = Math.round(median(pf.map((f) => f.colour.sat)));
+  metrics.contrast = Math.round(median(pf.map((f) => f.colour.contrast)));
+  metrics.sparkle = +median(pf.map((f) => f.colour.sparkle)).toFixed(2);
+  const rich = (ai.richness && typeof ai.richness === "object" ? ai.richness : { score: 50, look: "decent", issues: [], fix: null }) as Richness;
+  const richPass = rich.score >= 60 && !rich.issues.includes("yellow_cast") && !rich.issues.includes("plastic_finish");
 
   const ttp = n(ai.time_to_product_s), price = n(ai.price_on_screen_s), te = n(ai.telugu_text_s), stay = n(ai.reason_to_stay_s);
   const hashtags = (caption?.match(/#\w+/g) ?? []).length;
@@ -120,6 +139,7 @@ function buildReport(ai: Record<string, unknown>, metrics: Metrics, frames: Fram
     { name: "Reason to stay", pass: stay !== null && stay <= RULES.reason_to_stay_s, value: s(stay), target: `by ${RULES.reason_to_stay_s}s`, fix: "Add one line by second 3: occasion, price claim, or comparison." },
     { name: "Telugu on screen", pass: te !== null && te <= RULES.telugu_text_s, value: s(te), target: `by ${RULES.telugu_text_s}s`, fix: "Add a Telugu line in the first 3 seconds." },
     { name: "Sharpness on product", pass: productSharp >= SHARPNESS_MIN(), value: `${productSharp}/100`, target: `≥ ${SHARPNESS_MIN()}`, fix: "Refocus, add light, or move closer. Soft product frames read as cheap." },
+    { name: "Rich look", pass: richPass, value: `${rich.score}/100, ${rich.look}${rich.issues.length ? ` (${rich.issues.map((i) => i.replace(/_/g, " ")).join(", ")})` : ""}`, target: "≥ 60, no yellow cast", fix: rich.fix ?? "Neutral white balance, one hard light for sparkle, plain dark background." },
     { name: "Length", pass: metrics.duration_s >= RULES.duration_min_s && metrics.duration_s <= RULES.duration_max_s, value: `${metrics.duration_s}s`, target: `${RULES.duration_min_s} to ${RULES.duration_max_s}s`, fix: metrics.duration_s > RULES.duration_max_s ? "Trim to 15s. Keep only product-in-motion shots." : "Too short to land a reason to stay. Add one more angle." },
     { name: "Cut rate", pass: metrics.cuts_per_10s >= RULES.cuts_per_10s_min, value: `${metrics.cuts_per_10s} per 10s`, target: `≥ ${RULES.cuts_per_10s_min} per 10s`, fix: "Add angle changes every 2 to 3 seconds." },
     { name: "Brightness", pass: metrics.brightness >= RULES.brightness_min, value: `${metrics.brightness}/255`, target: `≥ ${RULES.brightness_min}`, fix: "Shoot in daylight or add a fill light." },
@@ -128,7 +148,7 @@ function buildReport(ai: Record<string, unknown>, metrics: Metrics, frames: Fram
   ];
 
   // Weighted: the first three checks decide whether anyone watches at all.
-  const weights = [25, 15, 15, 8, 15, 5, 7, 3, 4, 3];
+  const weights = [22, 13, 13, 7, 13, 12, 5, 7, 2, 4, 2];
   const score = Math.round(checks.reduce((acc, c, i) => acc + (c.pass ? weights[i] : 0), 0));
   const hardFail = !checks[0].pass || !checks[4].pass;
 
@@ -144,6 +164,7 @@ function buildReport(ai: Record<string, unknown>, metrics: Metrics, frames: Fram
     hooks: Array.isArray(ai.hooks) ? (ai.hooks as string[]).slice(0, 3) : [],
     caption_rewrite: String(ai.caption_rewrite ?? ""),
     subject: (ai.subject && typeof ai.subject === "object" ? ai.subject : undefined) as Subject | undefined,
+    richness: rich,
     summary: [ai.opening, ...(Array.isArray(ai.what_is_missing) ? (ai.what_is_missing as string[]) : []), ai.summary].filter(Boolean).join(" "),
   };
 }

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { analyze, pickForClaude, pickForStorage, transcribe } from "./video";
+import { analyze, pickForClaude, pickForStorage, transcribe, framesFromStored } from "./video";
 import { scoreWithClaude } from "./score";
 import type { Reel } from "./db";
 
@@ -9,5 +9,14 @@ export async function analyzeAndScore(videoPath: string, work: string, caption: 
   const [transcript, stored] = await Promise.all([transcribe(audioPath), pickForStorage(frames)]);
   const report = await scoreWithClaude({ frames: pickForClaude(frames), metrics, caption, transcript });
   const patch: Partial<Reel> = { status: report.verdict, metrics, report, frames: stored, transcript, error: null, updated_at: new Date().toISOString() };
+  return { patch, report, metrics };
+}
+
+/** Re-score from stored frames and metrics: no download, no ffmpeg. ~10s instead of ~40s. */
+export async function rescoreFromStored(reel: Reel) {
+  const frames = await framesFromStored(reel.frames!, reel.metrics!.sharpness);
+  const metrics = { ...reel.metrics! };
+  const report = await scoreWithClaude({ frames, metrics, caption: reel.caption, transcript: reel.transcript });
+  const patch: Partial<Reel> = { status: report.verdict, metrics, report, error: null, updated_at: new Date().toISOString() };
   return { patch, report, metrics };
 }

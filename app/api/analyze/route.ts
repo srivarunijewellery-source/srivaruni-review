@@ -5,7 +5,7 @@ import os from "node:os";
 import { db, type Reel } from "@/lib/db";
 import { download, move, writeText, setDescription, FOLDERS } from "@/lib/drive";
 import { metaReady, mediaUrl, insights, adResults, adFields } from "@/lib/meta";
-import { analyzeAndScore } from "@/lib/process";
+import { analyzeAndScore, rescoreFromStored } from "@/lib/process";
 import { reportMarkdown } from "@/lib/score";
 import { cleanup } from "@/lib/video";
 
@@ -23,6 +23,22 @@ async function handler(req: NextRequest) {
   if (!claimed?.length) return NextResponse.json({ done: false, note: "claimed by another run" });
 
   const isIg = reel.drive_file_id.startsWith("ig:");
+
+  // Fast path: frames and metrics already stored, so a rubric change only needs Claude.
+  if (reel.frames?.length && reel.metrics) {
+    try {
+      const { patch, report } = await rescoreFromStored(reel);
+      let ins = reel.insights;
+      if (isIg && metaReady()) { const fresh = await insights(reel.ig_media_id!).catch(() => null); const ads = await adResults().catch(() => new Map()); if (fresh) ins = { ...fresh, ...adFields(ads.get(reel.ig_media_id!)) }; }
+      await sb.from("reels").update({ ...patch, insights: ins }).eq("id", reel.id);
+      return NextResponse.json({ done: false, processed: reel.name, verdict: report.verdict, score: report.score, rescored: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await sb.from("reels").update({ status: "error", error: msg.slice(0, 2000), updated_at: new Date().toISOString() }).eq("id", reel.id);
+      return NextResponse.json({ done: false, processed: reel.name, error: msg });
+    }
+  }
+
   const work = await mkdtemp(path.join(os.tmpdir(), "sv-"));
   try {
     const videoPath = path.join(work, "in.mp4");
