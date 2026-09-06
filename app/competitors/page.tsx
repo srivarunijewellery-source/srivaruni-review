@@ -10,8 +10,8 @@ const pct = (xs: number[], p: number) => { const s = [...xs].sort((a, b) => a - 
 /** Competitor engagement proxy: likes + comments per 1k followers. Saves and views are private to the account. */
 const proxy = (r: Reel) => { const i = r.insights ?? {}; const f = i.followers || 1; return Math.round((((i.likes ?? 0) + (i.comments ?? 0)) / f) * 1000 * 10) / 10; };
 
-export default async function Competitors({ searchParams }: { searchParams: Promise<{ err?: string; added?: string; h?: string }> }) {
-  const { err, added, h } = await searchParams;
+export default async function Competitors({ searchParams }: { searchParams: Promise<{ err?: string; added?: string; h?: string; info?: string }> }) {
+  const { err, added, h, info } = await searchParams;
   const sb = db();
   const [{ data: mine }, { data: theirs }] = await Promise.all([
     sb.from("reels").select(LIST_COLS).is("competitor", null).order("created_at", { ascending: false }).limit(300),
@@ -45,7 +45,7 @@ export default async function Competitors({ searchParams }: { searchParams: Prom
       <p className="muted">Their public reels through your rubric. Engagement here is likes and comments per 1k followers, since saves and views are private to each account. What their top 20% does that you do not becomes a hypothesis, not a rule.</p>
       {err === "meta" && <p style={{ color: "var(--fix)" }}>Meta token and IG_USER_ID are needed for Business Discovery.</p>}
       {err && err !== "meta" && <p style={{ color: "var(--fix)" }}>{decodeURIComponent(err)}</p>}
-      {added && <p className="muted small">Registered {added} reels from @{h}. Press Analyze in the header to score them.</p>}
+      {added && <p className="muted small">Registered {added} reels from @{h}.{info ? ` Meta returned ${decodeURIComponent(info)}.` : ""}{+added > 0 ? " Press Analyze in the header to score them." : " Videos without a file are reels Meta withholds (usually copyrighted audio); images and carousels are not reels."}</p>}
 
       <form className="expform" action="/api/competitors" method="post" style={{ marginBottom: 18 }}>
         <label>Instagram handle<input type="text" name="handle" placeholder="@competitor_store" required /></label>

@@ -147,13 +147,13 @@ export function metricCount(actions: Record<string, number>, metric: string): nu
   return find(/^post_engagement$/i);
 }
 
-export type DiscoveredPost = { id: string; caption?: string; like_count?: number; comments_count?: number; media_type: string; media_url?: string; permalink: string; timestamp: string };
+export type DiscoveredPost = { id: string; caption?: string; like_count?: number; comments_count?: number; media_type: string; media_product_type?: string; media_url?: string; thumbnail_url?: string; permalink: string; timestamp: string };
 export type Discovery = { username: string; followers_count: number; media_count: number; posts: DiscoveredPost[] };
 
 /** Public data on another Business/Creator account, via your own IG user id. No saves or views; likes and comments only. */
 export async function businessDiscovery(handle: string): Promise<Discovery> {
   const clean = handle.replace(/^@/, "").trim();
-  const fields = `business_discovery.username(${clean}){username,followers_count,media_count,media.limit(40){id,caption,like_count,comments_count,media_type,media_url,permalink,timestamp}}`;
+  const fields = `business_discovery.username(${clean}){username,followers_count,media_count,media.limit(50){id,caption,like_count,comments_count,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp}}`;
   const j = await get(`/${process.env.IG_USER_ID}?fields=${encodeURIComponent(fields)}`);
   const bd = j.business_discovery;
   if (!bd) throw new Error(`No business account found for @${clean}`);
