@@ -10,7 +10,7 @@ const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return 
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const { view = "all" } = await searchParams;
-  const { data } = await db().from("reels").select(LIST_COLS).order("created_at", { ascending: false }).limit(300);
+  const { data } = await db().from("reels").select(LIST_COLS).is("competitor", null).order("created_at", { ascending: false }).limit(300);
   const reels = (data ?? []) as Reel[];
   const { bar, mid, n: barN, source } = computeBar(reels);
   const scored = reels.filter((r) => r.report && r.metrics).map((r) => ({ r, s: scoreDims(r.report!, r.metrics!, r.caption, r.frames?.length ?? 0), e: rates(r.insights, r.metrics!.duration_s) }));

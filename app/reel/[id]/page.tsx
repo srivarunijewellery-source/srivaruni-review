@@ -4,13 +4,14 @@ import { notFound } from "next/navigation";
 import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates, label } from "@/lib/dimensions";
 import Radar from "../../radar";
 import { fitModel } from "@/lib/model";
+import { HYPOTHESES, planFor, type Candidate } from "@/lib/hypotheses";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReelPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const sb = db();
-  const [{ data }, { data: all }] = await Promise.all([sb.from("reels").select("*").eq("id", id).single(), sb.from("reels").select(LIST_COLS).limit(300)]);
+  const [{ data }, { data: all }] = await Promise.all([sb.from("reels").select("*").eq("id", id).single(), sb.from("reels").select(LIST_COLS).is("competitor", null).limit(300)]);
   if (!data) notFound();
   const r = data as Reel;
   const rep = r.report, m = r.metrics;
@@ -20,6 +21,9 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
   const e = rates(r.insights, m?.duration_s);
   const { fit, rows: modelRows } = fitModel((all ?? []) as Reel[]);
   const actualEng = modelRows.find((x) => x.r.id === r.id)?.eng ?? null;
+  const engById = new Map(modelRows.map((x) => [x.r.id, x.eng]));
+  const cands: Candidate[] = ((all ?? []) as Reel[]).filter((x) => x.report && x.metrics).map((x) => ({ r: x, s: scoreDims(x.report!, x.metrics!, x.caption), eng: engById.get(x.id) ?? null }));
+  const tests = HYPOTHESES.map((h) => ({ h, plan: planFor(h, cands) })).filter(({ plan }) => plan.a.reel?.id === r.id || plan.b.reel?.id === r.id);
   const predictedEng = fit && s ? fit.predict(r, s) : null;
   const product = new Set(rep?.product_frames ?? []);
   const firstProduct = rep?.product_frames?.[0];
@@ -114,6 +118,22 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
             <div className="cardhead"><b>Editor notes</b></div>
             <p>{rep.summary}</p>
           </div>
+          {tests.length > 0 && (
+            <details className="card" open>
+              <summary><b>Tests this reel is picked for</b><span className="muted small">{tests.length} on the roadmap</span></summary>
+              {tests.map(({ h, plan }) => {
+                const arm = plan.a.reel?.id === r.id ? plan.a : plan.b;
+                const side = plan.a.reel?.id === r.id ? "A" : "B";
+                return (
+                  <div key={h.key} className="testrow">
+                    <div><b>{h.variable}</b> <span className="muted small">as variant {side}: {arm.label}</span></div>
+                    <ol className="small">{arm.steps.map((st, i) => <li key={i}>{st}</li>)}</ol>
+                    <Link className="small" href={`/experiments?plan=${h.key}#plan`}>Log this test →</Link>
+                  </div>
+                );
+              })}
+            </details>
+          )}
 
           <details open className="section"><summary>What the viewer sees</summary>
           <div className="legend"><i style={{ background: "var(--plum)" }} />first frame <i style={{ background: "var(--gold)" }} />jewellery on screen</div>

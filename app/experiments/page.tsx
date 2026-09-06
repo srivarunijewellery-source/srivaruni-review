@@ -2,7 +2,8 @@ import Link from "next/link";
 import { db, LIST_COLS, type Reel } from "@/lib/db";
 import { computeBar, scoreDims } from "@/lib/dimensions";
 import { fitModel, FEATURES } from "@/lib/model";
-import { HYPOTHESES, evidence, viewsPerArm, verdict, finalVerdict, planFor, type MarkRow, type Candidate } from "@/lib/hypotheses";
+import { HYPOTHESES, evidence, viewsPerArm, verdict, finalVerdict, planFor, PLAN_FOOTER, type MarkRow, type Candidate } from "@/lib/hypotheses";
+import Ticket from "../ticket";
 import { adRows, metaReady, type AdRow } from "@/lib/meta";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export default async function Experiments({ searchParams }: { searchParams: Prom
   const { plan, err } = await searchParams;
   const sb = db();
   const [{ data: rd }, { data: xd }, { data: md }, ads] = await Promise.all([
-    sb.from("reels").select(LIST_COLS).order("created_at", { ascending: false }).limit(300),
+    sb.from("reels").select(LIST_COLS).is("competitor", null).order("created_at", { ascending: false }).limit(300),
     sb.from("experiments").select("*").order("created_at", { ascending: false }),
     sb.from("hypothesis_marks").select("*"),
     metaReady() ? adRows().catch(() => [] as AdRow[]) : Promise.resolve([] as AdRow[]),
@@ -93,6 +94,7 @@ export default async function Experiments({ searchParams }: { searchParams: Prom
       <h1>Experiments</h1>
       <p className="muted">History says where to look. Ads say what is true. A hypothesis becomes a rule only after it replicates: two reads in the same direction at p&lt;0.1, or one at p&lt;0.01.</p>
       {err === "ids" && <p style={{ color: "var(--fix)" }}>Both ad IDs are needed before a result can be read.</p>}
+      <nav className="subnav"><a href="#roadmap">Roadmap</a><a href="#hyps">Hypotheses</a><a href="#rules">Rules</a><a href="#ads">Ads</a><a href="#plan">Log a test</a></nav>
 
       <div className="kpis">
         <div className="kpi"><small>Ad spend to date</small><b>{inr(totalSpend)}</b><span>{adReels.length} boosted reels, {ads.length} ads</span></div>
@@ -131,26 +133,17 @@ export default async function Experiments({ searchParams }: { searchParams: Prom
         </table>
       </details>
 
-      <details className="card" open>
-        <summary><b>Roadmap: next six tests</b><span className="muted small">same audience, same budget, same week, one variable changed</span></summary>
-        <ol className="brief roadmap">
-          {table.filter((t) => t.v !== "supported" && t.v !== "rejected").slice(0, 6).map(({ h, e }) => {
-            const plan = planFor(h, cands);
-            return (
-              <li key={h.key}>
-                <b>{h.variable}.</b> A: {h.a}. B: {h.b}. Read <b>{h.metric.replace("_", " ")}</b> per impression after {perArm.toLocaleString("en-IN")} views each, about {inr(budgetPerArm * 2)} total. {e.clarity === "no clarity" ? "History has almost nothing on this; it is a pure test." : e.direction === "supports" ? "History agrees; this confirms it is causal, not seasonal." : e.direction === "against" ? "History disagrees with the claim; worth settling." : "History is ambiguous."}
-                <div className="lab">
-                  <span className={`tag ${plan.kind === "shoot" ? "meets" : "raises"}`}>{plan.kind === "edit" ? "Edit an existing reel" : plan.kind === "pair" ? "Two existing reels" : "Needs a shoot"}</span>
-                  <ul>{plan.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
-                  {plan.reels.length > 0 && <div className="small">Use: {plan.reels.map((x, i) => <span key={x.id}>{i > 0 && " · "}<Link href={`/reel/${x.id}`}>{x.name}</Link> <span className="muted">({x.role})</span></span>)}</div>}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </details>
+      <section id="roadmap">
+        <h2>Roadmap: next six tests</h2>
+        <p className="muted small">Each ticket names the reel, the exact edit for the editor, and how to read it. Same audience, same budget, same week, one variable changed.</p>
+        <div className="tickets">
+          {table.filter((t) => t.v !== "supported" && t.v !== "rejected").slice(0, 6).map(({ h, priority }) => (
+            <Ticket key={h.key} variable={h.variable} priority={priority} budget={inr(budgetPerArm * 2)} views={perArm.toLocaleString("en-IN")} plan={planFor(h, cands)} planKey={h.key} footer={PLAN_FOOTER} />
+          ))}
+        </div>
+      </section>
 
-      <details className="card" open>
+      <details className="card" open id="rules">
         <summary><b>What we accept</b><span className="muted small">hard rules are proven; advisory rules come from the bar</span></summary>
         <div className="validation">
           <div>
@@ -165,7 +158,7 @@ export default async function Experiments({ searchParams }: { searchParams: Prom
         </div>
       </details>
 
-      <details className="card" open={adReels.length > 0}>
+      <details className="card" open={adReels.length > 0} id="ads">
         <summary><b>What the ads say</b><span className="muted small">{metaReady() ? `${ads.length} ads read from Meta` : "add META_ACCESS_TOKEN and META_AD_ACCOUNT_ID"}</span></summary>
         {adReels.length === 0 ? <p className="muted">No ad spend found on this account yet.</p> : (
           <div className="validation">

@@ -48,3 +48,8 @@ create table if not exists hypothesis_marks (
   updated_at timestamptz default now()
 );
 alter table hypothesis_marks enable row level security;
+
+-- v5: competitor reels via Business Discovery. Stored under drive_file_id 'comp:<handle>:<media id>' so they never enter your bar or model.
+alter table reels add column if not exists media_url text;
+alter table reels add column if not exists competitor text;
+create index if not exists reels_competitor_idx on reels (competitor);

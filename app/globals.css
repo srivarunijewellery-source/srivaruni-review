@@ -189,3 +189,30 @@ button.small, .btn.small { padding: 6px 10px; font-size: 0.8rem; }
 .roadmap > li { margin-bottom: 6px; }
 .markform select { font: inherit; font-size: 0.82rem; padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 8px; background: #fff; }
 .markform input { width: 120px; }
+
+.subnav { display: flex; gap: 4px; margin: 4px 0 18px; }
+.subnav a { padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 0.86rem; font-weight: 500; color: var(--muted); }
+.subnav a:hover { color: var(--ink); border-color: var(--line-2); }
+.tickets { display: grid; gap: 14px; }
+.ticket { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; }
+.ticket header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.ticket h3 { margin: 6px 0 0; font-size: 1.15rem; letter-spacing: -0.01em; }
+.ticketmeta { display: flex; gap: 14px; font-size: 0.82rem; color: var(--muted); text-align: right; flex-wrap: wrap; }
+.ticketmeta b { color: var(--ink); display: block; font-size: 1rem; }
+.why { margin: 8px 0 12px; color: var(--ink); }
+.arms { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.arm { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+.armhead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.armside { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: var(--maroon); color: #fff; font-weight: 700; font-size: 0.8rem; }
+.armreel { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; font-size: 0.86rem; color: var(--maroon); font-weight: 500; }
+.armreel img { width: 44px; height: 66px; object-fit: cover; border-radius: 6px; }
+.armreel .thumb { width: 44px; height: 66px; border-radius: 6px; background: var(--line); display: inline-block; }
+.arm ol { margin: 0; padding-left: 18px; display: grid; gap: 6px; line-height: 1.5; font-size: 0.92rem; }
+.ticketfoot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.ticketactions { display: flex; gap: 8px; }
+.ticketfoot a { color: var(--maroon); }
+.testrow { padding: 10px 0; border-top: 1px solid var(--line); }
+.testrow:first-of-type { border-top: 0; }
+.testrow ol { margin: 6px 0; padding-left: 18px; display: grid; gap: 4px; }
+.testrow a { color: var(--maroon); }
+@media (max-width: 700px) { .arms { grid-template-columns: 1fr; } }

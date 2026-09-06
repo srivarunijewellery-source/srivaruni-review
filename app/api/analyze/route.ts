@@ -24,6 +24,7 @@ async function handler(req: NextRequest) {
   if (!claimed?.length) return NextResponse.json({ done: false, note: "claimed by another run" });
 
   const isIg = reel.drive_file_id.startsWith("ig:");
+  const isComp = reel.drive_file_id.startsWith("comp:");
 
   // Fast path: frames and metrics already stored, so a rubric change only needs Claude.
   if (reel.frames?.length && reel.metrics) {
@@ -43,7 +44,12 @@ async function handler(req: NextRequest) {
   const work = await mkdtemp(path.join(os.tmpdir(), "sv-"));
   try {
     const videoPath = path.join(work, "in.mp4");
-    if (isIg) {
+    if (isComp) {
+      if (!reel.media_url) throw new Error("No media_url stored for this competitor reel; re-import the competitor.");
+      const res = await fetch(reel.media_url);
+      if (!res.ok) throw new Error(`competitor media download ${res.status}`);
+      await writeFile(videoPath, Buffer.from(await res.arrayBuffer()));
+    } else if (isIg) {
       const url = metaReady() ? await mediaUrl(reel.ig_media_id!) : null;
       if (!url) {
         const msg = "Instagram did not provide a video file for this reel (usually licensed music).";
