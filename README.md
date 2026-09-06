@@ -33,6 +33,12 @@ Videos are never stored by the app. They live in the editor's Drive; the app kee
 - **Analyze** works through the queue one reel at a time. Press Stop any time.
 - Every analysed reel is scored on seven dimensions (hook speed, clarity, message, pacing, light, length, caption). The **bar** is the 75th percentile of your posted reels on each. Tags: Raises / Meets / Below the bar.
 
+## Pages
+
+- **Reels**: the queue, the bar, the radar, the regression.
+- **Next reel**: a brief built from your own data.
+- **Experiments**: hypotheses ranked by impact × uncertainty, a roadmap of A/B tests sized from your own save rate and CPM, results read straight from Meta by ad ID, and acceptance rules that only harden once a hypothesis replicates.
+
 ## Day one: score what you already posted
 
 Press "Import posted reels" (or let the `importPosted` trigger run). Each call scores one reel from Instagram with the same rubric and joins its real saves, reach and watch time. After 30 or so, the dashboard shows which checks actually moved saves for your account. That table is the bar; raise `SHARPNESS_MIN` and the rules in `lib/score.ts` toward what your best reels already do.

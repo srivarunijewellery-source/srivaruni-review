@@ -8,7 +8,9 @@ export async function analyzeAndScore(videoPath: string, work: string, caption: 
   const { frames, metrics, audioPath } = await analyze(videoPath, path.join(work, "frames"));
   const [transcript, stored] = await Promise.all([transcribe(audioPath), pickForStorage(frames)]);
   const report = await scoreWithClaude({ frames: pickForClaude(frames), metrics, caption, transcript });
-  const patch: Partial<Reel> = { status: report.verdict, metrics, report, frames: stored, transcript, error: null, updated_at: new Date().toISOString() };
+  metrics.frame_count = stored.length;
+  const thumb = stored[report.product_frames?.[0] ?? 0]?.src ?? null;
+  const patch: Partial<Reel> = { status: report.verdict, metrics, report, frames: stored, thumb, transcript, error: null, updated_at: new Date().toISOString() };
   return { patch, report, metrics };
 }
 
@@ -17,6 +19,8 @@ export async function rescoreFromStored(reel: Reel) {
   const frames = await framesFromStored(reel.frames!, reel.metrics!.sharpness);
   const metrics = { ...reel.metrics! };
   const report = await scoreWithClaude({ frames, metrics, caption: reel.caption, transcript: reel.transcript });
-  const patch: Partial<Reel> = { status: report.verdict, metrics, report, error: null, updated_at: new Date().toISOString() };
+  metrics.frame_count = reel.frames!.length;
+  const thumb = reel.frames![report.product_frames?.[0] ?? 0]?.src ?? null;
+  const patch: Partial<Reel> = { status: report.verdict, metrics, report, thumb, error: null, updated_at: new Date().toISOString() };
   return { patch, report, metrics };
 }

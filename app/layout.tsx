@@ -20,7 +20,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <header className="top">
           <Link href="/" className="brand"><span className="mark">SV</span> Reel review</Link>
-          <nav className="navlinks"><Link href="/">Reels</Link><Link href="/next">Next reel</Link></nav>
+          <nav className="navlinks"><Link href="/">Reels</Link><Link href="/next">Next reel</Link><Link href="/experiments">Experiments</Link></nav>
           <nav><Actions pending={pending} /></nav>
         </header>
         <main>{children}</main>

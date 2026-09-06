@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, type Reel } from "@/lib/db";
+import { db, LIST_COLS, type Reel } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates, label } from "@/lib/dimensions";
 import Radar from "../../radar";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ReelPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const sb = db();
-  const [{ data }, { data: all }] = await Promise.all([sb.from("reels").select("*").eq("id", id).single(), sb.from("reels").select("*").limit(300)]);
+  const [{ data }, { data: all }] = await Promise.all([sb.from("reels").select("*").eq("id", id).single(), sb.from("reels").select(LIST_COLS).limit(300)]);
   if (!data) notFound();
   const r = data as Reel;
   const rep = r.report, m = r.metrics;

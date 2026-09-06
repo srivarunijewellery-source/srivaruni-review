@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { db, type Reel } from "@/lib/db";
+import { db, LIST_COLS, type Reel } from "@/lib/db";
 import { DIMS, scoreDims, computeBar, rates, label } from "@/lib/dimensions";
 import { fitModel } from "@/lib/model";
+import { HYPOTHESES, type MarkRow } from "@/lib/hypotheses";
 import Radar from "../radar";
 
 export const dynamic = "force-dynamic";
@@ -9,8 +10,13 @@ export const dynamic = "force-dynamic";
 const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 
 export default async function NextReel() {
-  const { data } = await db().from("reels").select("*").order("created_at", { ascending: false }).limit(300);
+  const sb = db();
+  const [{ data }, { data: md }] = await Promise.all([sb.from("reels").select(LIST_COLS).order("created_at", { ascending: false }).limit(300), sb.from("hypothesis_marks").select("*")]);
   const reels = (data ?? []) as Reel[];
+  const marks = new Map(((md ?? []) as MarkRow[]).map((m) => [m.key, m]));
+  const proven = HYPOTHESES.filter((h) => marks.get(h.key)?.mark === "supported");
+  const dropped = HYPOTHESES.filter((h) => marks.get(h.key)?.mark === "rejected");
+  const mark = (k: string) => marks.get(k)?.mark;
   const { bar, n: barN } = computeBar(reels);
   const scored = reels.filter((r) => r.report && r.metrics).map((r) => ({ r, s: scoreDims(r.report!, r.metrics!, r.caption, r.frames?.length ?? 0), e: rates(r.insights, r.metrics!.duration_s) }));
   const organic = scored.filter((x) => x.r.drive_file_id.startsWith("ig:") && x.e && !x.e.boosted);
@@ -80,11 +86,12 @@ export default async function NextReel() {
             <div className="cardhead"><b>The brief</b><span className="muted small">hand this to whoever shoots and edits</span></div>
             <ol className="brief">
               <li><b>Subject.</b> {shoot.motif ? `${label(shoot.motif.k)} motif` : "Best-performing motif once 6 reels are read"}{shoot.piece ? `, ${label(shoot.piece.k).toLowerCase()}` : ""}{shoot.colour ? `, ${label(shoot.colour.k).toLowerCase()}` : ""}{shoot.person ? `. ${shoot.person.k === "face_visible" ? "Face in frame; the piece worn, not held." : shoot.person.k === "hands_only" ? "Hands presenting the piece; no face." : "Piece alone on a plain surface."}` : ""}</li>
-              <li><b>First second.</b> Jewellery already filling the frame and moving. Price as text on frame one. Target time to product under {Math.max(0.5, +((100 - bar.hook) / 33).toFixed(1))}s.</li>
-              <li><b>By second three.</b> One Telugu line that gives a reason: occasion, price claim, or comparison.</li>
+              <li><b>First second.</b> Jewellery already filling the frame and moving{mark("ttp") === "supported" ? " (proven)" : ""}.{mark("price") === "rejected" ? "" : ` Price as text on frame one${mark("price") === "supported" ? " (proven)" : ""}.`} Target time to product under {Math.max(0.5, +((100 - bar.hook) / 33).toFixed(1))}s.</li>
+              <li><b>By second three.</b> {mark("telugu") === "rejected" ? "One line" : `One Telugu line${mark("telugu") === "supported" ? " (proven)" : ""}`} that gives a reason{mark("reason") === "supported" ? " (proven)" : ""}: occasion, price claim, or comparison.</li>
               <li><b>Look.</b> {issues.length ? issues.map(([i, v]) => `${i.replace(/_/g, " ")} keeps showing up (${v.n} of last 20)${v.fix ? `: ${v.fix}` : ""}`).join(". ") + "." : "Neutral white balance, one hard key light for sparkle, plain dark background."}</li>
               <li><b>Length and pace.</b> 7 to 15 seconds, an angle change every 2 to 3 seconds, product on screen for at least 80% of the reel.</li>
               <li><b>Caption.</b> One line, price, occasion, WhatsApp number, five hashtags.</li>
+              {(proven.length > 0 || dropped.length > 0) && <li><b>From your tests.</b> {proven.length > 0 && <>Proven: {proven.map((h) => h.claim).join(" ")} </>}{dropped.length > 0 && <span className="muted">Dropped: {dropped.map((h) => h.variable).join(", ")}.</span>}</li>}
               <li><b>Beat this.</b> Overall {bar.overall} on the rubric{organic.length ? `, engagement above ${med(organic.map((x) => engById.get(x.r.id) ?? 0))}` : ""}.</li>
             </ol>
           </div>
@@ -105,7 +112,7 @@ export default async function NextReel() {
                 <div className="refs">
                   {top.map(({ r, s }) => (
                     <Link key={r.id} href={`/reel/${r.id}`} className="ref">
-                      {r.frames?.[r.report?.product_frames?.[0] ?? 0]?.src && <img src={r.frames[r.report?.product_frames?.[0] ?? 0].src} alt="" />}
+                      {r.thumb && <img src={r.thumb} alt="" />}
                       <div><b>{engById.get(r.id)}</b> engagement · {s.overall} score<div className="muted small">{r.name}</div>{r.report?.subject && <div className="muted small">{label(r.report.subject.motif)} · {label(r.report.subject.piece)} · {label(r.report.subject.person)}</div>}{r.report?.subject?.emotional_hook && <div className="small">“{r.report.subject.emotional_hook}”</div>}</div>
                     </Link>
                   ))}

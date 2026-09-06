@@ -5,10 +5,11 @@ export type Reel = {
   drive_file_id: string;
   name: string;
   caption: string | null;
-  status: "pending" | "processing" | "ready" | "fix" | "error";
+  status: "pending" | "processing" | "paused" | "ready" | "fix" | "error";
   metrics: Metrics | null;
   report: Report | null;
-  frames: StoredFrame[] | null;
+  frames?: StoredFrame[] | null; // only loaded on the single-reel page
+  thumb?: string | null;
   transcript: string | null;
   ig_media_id: string | null;
   ig_permalink: string | null;
@@ -34,6 +35,7 @@ export type Metrics = {
   sparkle?: number; // % specular highlight pixels on product frames
   width: number;
   height: number;
+  frame_count?: number;
 };
 
 export type Check = { name: string; pass: boolean; value: string; target: string; fix: string };
@@ -74,3 +76,6 @@ export const db = () =>
   createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false },
   });
+
+/** Columns for list pages: everything except the frames blob. */
+export const LIST_COLS = "id,drive_file_id,name,caption,status,metrics,report,transcript,ig_media_id,ig_permalink,insights,error,created_at,updated_at,thumb";

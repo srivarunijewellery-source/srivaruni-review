@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db, type Reel } from "@/lib/db";
+import { db, LIST_COLS, type Reel } from "@/lib/db";
 import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates, pearson, strength, label } from "@/lib/dimensions";
 import Radar from "./radar";
 import { fitModel } from "@/lib/model";
@@ -10,7 +10,7 @@ const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return 
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const { view = "all" } = await searchParams;
-  const { data } = await db().from("reels").select("*").order("created_at", { ascending: false }).limit(300);
+  const { data } = await db().from("reels").select(LIST_COLS).order("created_at", { ascending: false }).limit(300);
   const reels = (data ?? []) as Reel[];
   const { bar, mid, n: barN, source } = computeBar(reels);
   const scored = reels.filter((r) => r.report && r.metrics).map((r) => ({ r, s: scoreDims(r.report!, r.metrics!, r.caption, r.frames?.length ?? 0), e: rates(r.insights, r.metrics!.duration_s) }));
@@ -172,7 +172,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
       ) : (
         <div className="grid">
           {shown.map(({ r, s, tag, e }) => {
-            const thumb = r.frames?.[r.report?.product_frames?.[0] ?? 0]?.src;
+            const thumb = r.thumb;
             return (
               <Link className="tile" key={r.id} href={`/reel/${r.id}`}>
                 <div className="tilehead">
@@ -188,10 +188,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
             );
           })}
           {queue.map((r) => (
-            <Link className="tile queued" key={r.id} href={`/reel/${r.id}`}>
+            <Link className={`tile queued ${r.status}`} key={r.id} href={`/reel/${r.id}`}>
               <div className="tilebody">
                 <div className="tiletitle">{r.name}</div>
-                <div className={`tag ${r.status}`}>{r.status === "pending" ? "Waiting for Analyze" : r.status === "processing" ? "Analysing" : r.status === "error" ? "Skipped" : "Fix"}</div>
+                <div className={`tag ${r.status}`}>{r.status === "pending" ? "Waiting for Analyze" : r.status === "processing" ? <><span className="spin" />Analysing</> : r.status === "paused" ? "Paused" : r.status === "error" ? "Skipped" : "Fix"}</div>
                 {r.error && <div className="muted small">{r.error.slice(0, 120)}</div>}
               </div>
             </Link>

@@ -103,3 +103,46 @@ export function adFields(r: AdResult | undefined): Record<string, number> {
   if (eng) { out.ad_engagements = eng[1]; out.ad_cost_per_engagement = r.cpa[eng[0]]; }
   return out;
 }
+
+export type AdRow = { id: string; name: string; status: string; mediaId: string | null; spend: number; impressions: number; actions: Record<string, number>; cpa: Record<string, number> };
+
+/** Every ad in the account with its lifetime results. Cached 10 minutes. */
+let rowCache: { at: number; rows: AdRow[] } | null = null;
+export async function adRows(): Promise<AdRow[]> {
+  const acct = process.env.META_AD_ACCOUNT_ID;
+  if (!acct) return [];
+  if (rowCache && Date.now() - rowCache.at < 10 * 60e3) return rowCache.rows;
+  const rows: AdRow[] = [];
+  let url: string | null = `/act_${acct}/ads?fields=id,name,status,creative{effective_instagram_media_id},insights.date_preset(maximum){spend,impressions,actions,cost_per_action_type}&limit=100`;
+  type Raw = { id: string; name: string; status: string; creative?: { effective_instagram_media_id?: string }; insights?: { data: { spend: string; impressions: string; actions?: { action_type: string; value: string }[]; cost_per_action_type?: { action_type: string; value: string }[] }[] } };
+  for (let page = 0; url && page < 10; page++) {
+    const j: { data: Raw[]; paging?: { next?: string } } = await get(url);
+    for (const a of j.data) {
+      const ins = a.insights?.data?.[0];
+      const actions: Record<string, number> = {}, cpa: Record<string, number> = {};
+      for (const x of ins?.actions ?? []) actions[x.action_type] = +x.value || 0;
+      for (const x of ins?.cost_per_action_type ?? []) cpa[x.action_type] = +x.value || 0;
+      rows.push({ id: a.id, name: a.name, status: a.status, mediaId: a.creative?.effective_instagram_media_id ?? null, spend: +(ins?.spend ?? 0), impressions: +(ins?.impressions ?? 0), actions, cpa });
+    }
+    url = j.paging?.next ?? null;
+  }
+  rowCache = { at: Date.now(), rows };
+  return rows;
+}
+
+export async function adInsights(adId: string): Promise<{ spend: number; impressions: number; actions: Record<string, number> }> {
+  const j = await get(`/${adId}/insights?fields=spend,impressions,actions&date_preset=maximum`);
+  const d = j.data?.[0] ?? {};
+  const actions: Record<string, number> = {};
+  for (const x of d.actions ?? []) actions[x.action_type] = +x.value || 0;
+  return { spend: +(d.spend ?? 0), impressions: +(d.impressions ?? 0), actions };
+}
+
+/** Pick the count for a metric out of Meta's action names. */
+export function metricCount(actions: Record<string, number>, metric: string): number {
+  const find = (re: RegExp) => Object.entries(actions).find(([k]) => re.test(k))?.[1] ?? 0;
+  if (metric === "saves") return find(/post_save|^save$/i);
+  if (metric === "link_clicks") return find(/^link_click$/i);
+  if (metric === "follows") return find(/follow/i);
+  return find(/^post_engagement$/i);
+}

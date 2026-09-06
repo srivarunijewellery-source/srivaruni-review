@@ -17,7 +17,8 @@ export type Scores = Record<DimKey, number> & { overall: number };
 
 const clamp = (x: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, x));
 
-export function scoreDims(r: Report, m: Metrics, caption: string | null, frameCount = 0): Scores {
+export function scoreDims(r: Report, m: Metrics, caption: string | null, frameCountArg = 0): Scores {
+  const frameCount = m.frame_count ?? frameCountArg;
   const ttp = r.time_to_product_s;
   const hook = ttp === null ? 0 : clamp(100 - ttp * 33);
   const clarity = clamp(m.sharpness);

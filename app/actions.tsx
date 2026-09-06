@@ -12,6 +12,7 @@ export default function Actions({ pending }: { pending: number }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"" | "import" | "scan" | "analyze">("");
   const [msg, setMsg] = useState("");
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const stopRef = useRef(false);
 
   async function run(kind: "import" | "scan") {
@@ -29,17 +30,17 @@ export default function Actions({ pending }: { pending: number }) {
     await post("/api/pause?resume=1");
     const start = ((await (await fetch("/api/status")).json()) as Res).pending as number;
     for (let i = 0; i < LANES; i++) fetch("/api/analyze?chain=1", { method: "POST" }).catch(() => {});
-    setMsg(`Analysing ${start} reels…`);
+    setProgress({ done: 0, total: start }); setMsg(`Analysing ${start} reels`);
     for (let i = 0; i < 600; i++) {
       await new Promise((r) => setTimeout(r, 4000));
       const st = (await (await fetch("/api/status")).json()) as { pending: number; processing: number };
       const left = st.pending + st.processing;
-      setMsg(`Analysing… ${Math.max(0, start - left)} of ${start} done`);
+      setProgress({ done: Math.max(0, start - left), total: start }); setMsg(`${st.processing} running`);
       router.refresh();
       if (left === 0) { setMsg(`Done. ${start} analysed.`); break; }
       if (stopRef.current) { await post("/api/pause"); setMsg(`Paused with ${st.pending} waiting. Press Analyze to resume.`); break; }
     }
-    setBusy(""); router.refresh();
+    setProgress(null); setBusy(""); router.refresh();
   }
 
   async function reanalyze() {
@@ -55,7 +56,21 @@ export default function Actions({ pending }: { pending: number }) {
       {busy === "analyze"
         ? <button onClick={() => { stopRef.current = true; }}>Pause</button>
         : <button disabled={!!busy || pending === 0} onClick={analyze}>Analyze {pending > 0 ? `(${pending})` : ""}</button>}
+      {progress && <Ring done={progress.done} total={progress.total} />}
       {msg && <span className={`status${busy ? " live" : ""}`}>{msg}</span>}
     </div>
+  );
+}
+
+function Ring({ done, total }: { done: number; total: number }) {
+  const r = 12, c = 2 * Math.PI * r, pct = total ? done / total : 0;
+  return (
+    <span className="ring" title={`${done} of ${total}`}>
+      <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+        <circle cx="16" cy="16" r={r} fill="none" stroke="var(--line)" strokeWidth="3" />
+        <circle cx="16" cy="16" r={r} fill="none" stroke="var(--maroon)" strokeWidth="3" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)} transform="rotate(-90 16 16)" style={{ transition: "stroke-dashoffset .4s ease" }} />
+      </svg>
+      <b>{done}/{total}</b>
+    </span>
   );
 }
