@@ -21,23 +21,24 @@ export default function Actions({ pending }: { pending: number }) {
     setBusy(""); router.refresh();
   }
 
-  // Three reels at a time; each request claims its own reel server-side so nothing is processed twice.
+  // Start three server-side chains; each one keeps claiming the next reel on Vercel until nothing is pending.
+  // The browser only watches progress, so opening a reel or closing the tab does not stop the run.
   const LANES = 3;
   async function analyze() {
-    setBusy("analyze"); stopRef.current = false; let n = 0, skipped = 0, failed = 0, done = false;
-    const lane = async () => {
-      while (!done && !stopRef.current && failed < 5) {
-        const r = await post("/api/analyze");
-        if (r.error && !r.processed) { setMsg(`Stopped: ${r.error}`); done = true; return; }
-        if (r.done) { done = true; return; }
-        if (r.skipped) skipped++; else if (r.error) failed++; else n++;
-        setMsg(`Analysing… ${n} done${skipped ? `, ${skipped} skipped` : ""}${failed ? `, ${failed} failed` : ""}`);
-        router.refresh();
-      }
-    };
-    setMsg("Analysing…");
-    await Promise.all(Array.from({ length: LANES }, lane));
-    setMsg(stopRef.current ? `Paused. ${n} analysed.` : failed >= 5 ? `Stopped after 5 failures.` : `Done. ${n} analysed${skipped ? `, ${skipped} skipped (no video from Instagram)` : ""}${failed ? `, ${failed} failed` : ""}.`);
+    setBusy("analyze"); stopRef.current = false;
+    await post("/api/pause?resume=1");
+    const start = ((await (await fetch("/api/status")).json()) as Res).pending as number;
+    for (let i = 0; i < LANES; i++) fetch("/api/analyze?chain=1", { method: "POST" }).catch(() => {});
+    setMsg(`Analysing ${start} reels…`);
+    for (let i = 0; i < 600; i++) {
+      await new Promise((r) => setTimeout(r, 4000));
+      const st = (await (await fetch("/api/status")).json()) as { pending: number; processing: number };
+      const left = st.pending + st.processing;
+      setMsg(`Analysing… ${Math.max(0, start - left)} of ${start} done`);
+      router.refresh();
+      if (left === 0) { setMsg(`Done. ${start} analysed.`); break; }
+      if (stopRef.current) { await post("/api/pause"); setMsg(`Paused with ${st.pending} waiting. Press Analyze to resume.`); break; }
+    }
     setBusy(""); router.refresh();
   }
 
@@ -52,7 +53,7 @@ export default function Actions({ pending }: { pending: number }) {
       <button className="ghost" disabled={!!busy} onClick={() => run("import")}>{busy === "import" ? "Importing…" : "Import from Instagram"}</button>
       <button className="ghost" disabled={!!busy} onClick={() => run("scan")}>{busy === "scan" ? "Scanning…" : "Scan Drive"}</button>
       {busy === "analyze"
-        ? <button onClick={() => { stopRef.current = true; }}>Stop</button>
+        ? <button onClick={() => { stopRef.current = true; }}>Pause</button>
         : <button disabled={!!busy || pending === 0} onClick={analyze}>Analyze {pending > 0 ? `(${pending})` : ""}</button>}
       {msg && <span className={`status${busy ? " live" : ""}`}>{msg}</span>}
     </div>

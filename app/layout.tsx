@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Actions from "./actions";
+import Link from "next/link";
 import { db } from "@/lib/db";
 
 export const metadata: Metadata = { title: "Sri Varuni reel review", description: "Every reel measured against your own bar." };
@@ -18,7 +19,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <header className="top">
-          <a href="/" className="brand"><span className="mark">SV</span> Reel review</a>
+          <Link href="/" className="brand"><span className="mark">SV</span> Reel review</Link>
+          <nav className="navlinks"><Link href="/">Reels</Link><Link href="/next">Next reel</Link></nav>
           <nav><Actions pending={pending} /></nav>
         </header>
         <main>{children}</main>

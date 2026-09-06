@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db, type Reel } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates, label } from "@/lib/dimensions";
@@ -25,7 +26,7 @@ export default async function ReelPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <a href="/" className="muted small">← All reels</a>
+      <Link href="/" className="muted small">← All reels</Link>
       <h1>{r.name}</h1>
       {!rep && <p className="muted">{r.error ?? (r.status === "processing" ? "Analysing now." : "Waiting for Analyze.")}</p>}
 

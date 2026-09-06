@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -78,9 +79,17 @@ async function handler(req: NextRequest) {
   }
 }
 
-export async function POST(...args: Parameters<typeof handler>) {
+// ?chain=1: after this reel, kick the next one server-side so the run survives the browser navigating away or closing.
+export async function POST(req: NextRequest) {
   const utf8 = { "content-type": "application/json; charset=utf-8" };
-  try { const r = await handler(...args); r.headers.set("content-type", utf8["content-type"]); return r; }
-  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500, headers: utf8 }); }
+  try {
+    const r = await handler(req);
+    r.headers.set("content-type", utf8["content-type"]);
+    const body = await r.clone().json().catch(() => ({}));
+    if (req.nextUrl.searchParams.get("chain") === "1" && !body.done) {
+      waitUntil(fetch(`${req.nextUrl.origin}/api/analyze?chain=1`, { method: "POST", headers: { "x-app-password": process.env.APP_PASSWORD ?? "" } }).catch(() => {}));
+    }
+    return r;
+  } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500, headers: utf8 }); }
 }
 export const GET = POST;

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db, type Reel } from "@/lib/db";
 import { DIMS, scoreDims, computeBar, tagFor, TAG_LABEL, rates, pearson, strength, label } from "@/lib/dimensions";
 import Radar from "./radar";
@@ -163,7 +164,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
       </details>
 
       <div className="tabs">
-        {[["all", "All"], ["instagram", "Posted on Instagram"], ["drafts", "Drive drafts"]].map(([k, l]) => <a key={k} href={`/?view=${k}`} className={view === k ? "on" : ""}>{l}</a>)}
+        {[["all", "All"], ["instagram", "Posted on Instagram"], ["drafts", "Drive drafts"]].map(([k, l]) => <Link key={k} href={`/?view=${k}`} className={view === k ? "on" : ""}>{l}</Link>)}
       </div>
 
       {shown.length === 0 && queue.length === 0 ? (
@@ -173,7 +174,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
           {shown.map(({ r, s, tag, e }) => {
             const thumb = r.frames?.[r.report?.product_frames?.[0] ?? 0]?.src;
             return (
-              <a className="tile" key={r.id} href={`/reel/${r.id}`}>
+              <Link className="tile" key={r.id} href={`/reel/${r.id}`}>
                 <div className="tilehead">
                   {thumb ? <img src={thumb} alt="" /> : <div className="thumb" />}
                   <div className="mini"><Radar scores={s} bar={bar} size={120} labels={false} /></div>
@@ -183,17 +184,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
                   <div className="tagrow"><div className={`tag ${tag}`}>{TAG_LABEL[tag]}</div>{e?.boosted && <div className="tag boosted">Boosted</div>}{r.report?.subject && <div className="tag subject">{label(r.report.subject.motif)}</div>}</div>
                   <div className="tilefacts"><span><b>{s.overall}</b> score</span>{engById.has(r.id) && <span><b>{engById.get(r.id)}</b> engagement</span>}{fit && !engById.has(r.id) && <span><b>{predicted({ r, s })}</b> predicted</span>}{e?.watchThrough != null && <span><b>{e.watchThrough}%</b> watched</span>}</div>
                 </div>
-              </a>
+              </Link>
             );
           })}
           {queue.map((r) => (
-            <a className="tile queued" key={r.id} href={`/reel/${r.id}`}>
+            <Link className="tile queued" key={r.id} href={`/reel/${r.id}`}>
               <div className="tilebody">
                 <div className="tiletitle">{r.name}</div>
                 <div className={`tag ${r.status}`}>{r.status === "pending" ? "Waiting for Analyze" : r.status === "processing" ? "Analysing" : r.status === "error" ? "Skipped" : "Fix"}</div>
                 {r.error && <div className="muted small">{r.error.slice(0, 120)}</div>}
               </div>
-            </a>
+            </Link>
           ))}
         </div>
       )}
