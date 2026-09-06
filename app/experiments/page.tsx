@@ -15,7 +15,7 @@ type Exp = { id: string; hypothesis: string; variant_a: string; variant_b: strin
 export default async function Experiments({ searchParams }: { searchParams: Promise<{ plan?: string; err?: string }> }) {
   const { plan, err } = await searchParams;
   const sb = db();
-  const [{ data: rd }, { data: xd }, { data: md }, ads] = await Promise.all([
+  const [{ data: rd, error }, { data: xd }, { data: md }, ads] = await Promise.all([
     sb.from("reels").select(LIST_COLS).is("competitor", null).order("created_at", { ascending: false }).limit(300),
     sb.from("experiments").select("*").order("created_at", { ascending: false }),
     sb.from("hypothesis_marks").select("*"),
@@ -23,6 +23,7 @@ export default async function Experiments({ searchParams }: { searchParams: Prom
   ]);
   const marks = new Map(((md ?? []) as MarkRow[]).map((m) => [m.key, m]));
   const reels = (rd ?? []) as Reel[];
+  if (error) return <div className="empty" style={{ color: "var(--fix)" }}>Database query failed: {error.message}. Run the pending SQL in supabase/schema.sql and reload.</div>;
   const exps = (xd ?? []) as Exp[];
   const { fit, rows } = fitModel(reels);
   const { bar } = computeBar(reels);

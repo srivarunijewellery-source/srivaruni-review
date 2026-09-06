@@ -13,11 +13,12 @@ const proxy = (r: Reel) => { const i = r.insights ?? {}; const f = i.followers |
 export default async function Competitors({ searchParams }: { searchParams: Promise<{ err?: string; added?: string; h?: string; info?: string }> }) {
   const { err, added, h, info } = await searchParams;
   const sb = db();
-  const [{ data: mine }, { data: theirs }] = await Promise.all([
+  const [{ data: mine, error }, { data: theirs }] = await Promise.all([
     sb.from("reels").select(LIST_COLS).is("competitor", null).order("created_at", { ascending: false }).limit(300),
     sb.from("reels").select(LIST_COLS).not("competitor", "is", null).order("created_at", { ascending: false }).limit(400),
   ]);
   const ours = (mine ?? []) as Reel[], comp = (theirs ?? []) as Reel[];
+  if (error) return <div className="empty" style={{ color: "var(--fix)" }}>Database query failed: {error.message}. Run the pending SQL in supabase/schema.sql and reload.</div>;
   const { bar } = computeBar(ours);
   const score = (r: Reel) => scoreDims(r.report!, r.metrics!, r.caption);
   const oursScored = ours.filter((r) => r.report && r.metrics).map((r) => ({ r, s: score(r) }));

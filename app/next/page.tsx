@@ -11,8 +11,9 @@ const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return 
 
 export default async function NextReel() {
   const sb = db();
-  const [{ data }, { data: md }] = await Promise.all([sb.from("reels").select(LIST_COLS).is("competitor", null).order("created_at", { ascending: false }).limit(300), sb.from("hypothesis_marks").select("*")]);
+  const [{ data, error }, { data: md }] = await Promise.all([sb.from("reels").select(LIST_COLS).is("competitor", null).order("created_at", { ascending: false }).limit(300), sb.from("hypothesis_marks").select("*")]);
   const reels = (data ?? []) as Reel[];
+  if (error) return <div className="empty" style={{ color: "var(--fix)" }}>Database query failed: {error.message}. Run the pending SQL in supabase/schema.sql and reload.</div>;
   const marks = new Map(((md ?? []) as MarkRow[]).map((m) => [m.key, m]));
   const proven = HYPOTHESES.filter((h) => marks.get(h.key)?.mark === "supported");
   const dropped = HYPOTHESES.filter((h) => marks.get(h.key)?.mark === "rejected");
